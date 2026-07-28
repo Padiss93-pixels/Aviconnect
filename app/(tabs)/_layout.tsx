@@ -2,6 +2,7 @@ import { Tabs, router } from 'expo-router';
 import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import { BookOpen, House, MessageCircle, Plus, Store, User } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Fonts, Radius, Shadows } from '@/constants/theme';
 import { useAuthContext } from '@/hooks/AuthContext';
 
@@ -60,11 +61,14 @@ function PublishButton() {
 }
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+  // Expo 54 est edge-to-edge sur Android : la tab bar doit intégrer la zone système
+  const bottomPad = Math.max(insets.bottom, 10);
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [styles.tabBar, { height: 62 + bottomPad, paddingBottom: bottomPad }],
         tabBarShowLabel: false,
         tabBarHideOnKeyboard: true,
       }}
@@ -98,8 +102,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.tabBar,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.border,
-    height: Platform.OS === 'ios' ? 86 : 70,
-    paddingBottom: Platform.OS === 'ios' ? 26 : 10,
     paddingTop: 10,
     ...Platform.select({
       ios: { shadowColor: Colors.shadow, shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.05, shadowRadius: 14 },
@@ -112,7 +114,7 @@ const styles = StyleSheet.create({
   iconBoxActive: { backgroundColor: Colors.primaryTint },
   tabLabel: { fontSize: 10, color: Colors.textMuted, fontFamily: Fonts.bodyMedium },
   tabLabelActive: { color: Colors.primaryDark, fontFamily: Fonts.bodyBold },
-  publishOuter: { alignItems: 'center', justifyContent: 'center', marginBottom: Platform.OS === 'ios' ? 18 : 6 },
+  publishOuter: { alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
   publishInner: {
     width: 54, height: 54, borderRadius: 20, overflow: 'hidden',
     justifyContent: 'center', alignItems: 'center',

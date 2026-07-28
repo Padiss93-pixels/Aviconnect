@@ -9,14 +9,18 @@ import { PRODUCT_EMOJIS } from '@/constants/mockData';
 import { useAuthContext } from '@/hooks/AuthContext';
 import { useAnnonces } from '@/hooks/AnnoncesContext';
 import { useOrders } from '@/hooks/OrdersContext';
+import { useRewards } from '@/hooks/RewardsContext';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 
 type PayMode = 'message';
 
 export default function CommanderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user, signIn } = useAuthContext();
-  const { annonces, reduceStock, sendNotification } = useAnnonces();
+  const { annonces, sendNotification } = useAnnonces();
   const { addOrder } = useOrders();
+  const { award } = useRewards();
+  const isOnline = useNetworkStatus();
 
   const lot = annonces.find((l) => l.id === Number(id));
 
@@ -41,16 +45,18 @@ export default function CommanderScreen() {
 
   const handleCommander = async () => {
     if (!validate()) return;
+    if (!isOnline) {
+      setError('Pas de connexion internet. Reconnectez-vous pour commander.');
+      return;
+    }
     setError('');
     setLoading(true);
     await new Promise((r) => setTimeout(r, 1200));
 
     const acheteur = user ? `${user.prenom} ${user.nom}` : 'Un acheteur';
-    const orderId = Date.now();
 
-    // Sauvegarder la commande
-    await addOrder({
-      id: orderId,
+    // Sauvegarder la commande dans Supabase
+    const orderId = await addOrder({
       lotId: lot.id,
       lotTitre: lot.titre,
       lotProduit: lot.produit,
@@ -66,12 +72,18 @@ export default function CommanderScreen() {
       note,
       payMode,
       status: 'en_attente',
-      date: new Date().toISOString(),
     });
 
-    // Réduire le stock + notif vendeur (lot.eleveurId ciblé dans reduceStock)
-    await reduceStock(lot.id, qteNum, acheteur, orderId);
+    // Notifier le vendeur de la nouvelle commande
+    await sendNotification(
+      'nouvelle_commande',
+      '🛒 Nouvelle commande !',
+      `${acheteur} a commandé ${qteNum} unités de "${lot.titre}".`,
+      orderId ?? undefined,
+      lot.eleveurId,
+    );
 
+    await award('order');
     setLoading(false);
 
     const msg = `✅ Demande envoyée à ${lot.eleveur} !\n\nIl vous contactera directement pour confirmer et organiser le paiement.`;

@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**AviConnect** — marketplace avicole sénégalaise (React Native + Expo SDK 54, TypeScript). Connecte éleveurs, acheteurs, couvoirs et vétérinaires dans les 14 régions du Sénégal. Pas de backend — toutes les données sont persistées localement via AsyncStorage (mobile) ou localStorage (web).
+**AviConnect** — marketplace avicole sénégalaise (React Native + Expo SDK 54, TypeScript). Connecte éleveurs, acheteurs, couvoirs et vétérinaires dans les 14 régions du Sénégal.
+
+**Backend : Supabase** (`https://ctnmflsyueqtwvhcksqz.supabase.co`, clé anon dans `.env` et dans `eas.json` pour les builds, guide dans `SUPABASE.md`). La migration est **terminée** : tous les contextes de `hooks/` lisent et écrivent dans Supabase (auth, profils, annonces, besoins, commandes, catalogues vétérinaires, pubs, actualités, boosts, favoris, notifications). Seul `RewardsContext` conserve un cache local en complément.
 
 ## Commandes
 
@@ -20,34 +22,43 @@ eas submit --platform android                    # Google Play
 eas submit --platform ios                        # App Store
 ```
 
-**Compte de démo :**
-- N'importe quel numéro à 9+ chiffres + n'importe quel code OTP à 5 chiffres
-- Admin : numéro `000000000` + n'importe quel code OTP
+**Authentification (Supabase Auth, juillet 2026) :**
+- Email + mot de passe via Supabase (`signIn`/`signUp` dans `AuthContext`). Confirmation d'email exigée à l'inscription. L'écran OTP téléphone a été supprimé (pas de fournisseur SMS pour l'instant).
+- Mot de passe oublié : `resetPasswordForEmail` → lien email → écran `app/reset-password.tsx`.
+- Admin : impossible depuis l'app — promotion via SQL uniquement (`update profiles set role='admin' where email='...'`). Les colonnes `role/blocked/verified/statuts` sont verrouillées côté serveur par trigger.
+- Le rôle demandé à l'inscription passe par les métadonnées ; le trigger `handle_new_user` crée la ligne `profiles` (statut `pending` pour couvoir/vétérinaire) et `notify_admins_on_signup` notifie les admins en base.
+- Voir `SECURITY.md` et `SUPABASE.md`.
 
 ## Architecture
 
-### Persistance (pas de backend)
+### Persistance (Supabase)
 
-Tout est dans `hooks/useAuth.ts` via une fonction `storage()` qui bascule automatiquement entre `localStorage` (web) et `AsyncStorage` (mobile). Ce pattern est répété dans chaque contexte.
+Chaque contexte de `hooks/` interroge directement `lib/supabase.ts`. Le schéma de référence est
+`supabase/schema.sql`, complété par les migrations `add_*.sql` et `migrate_to_supabase.sql` du même
+dossier.
 
-Clés de stockage importantes :
-- `@aviconnect_user` — utilisateur connecté
-- `@aviconnect_users_registry` — registre global de tous les comptes
-- `@aviconnect_passwords` — map `{ [userId]: password }`
-- `@aviconnect_notifs_admin` — clé fixe pour les notifications admin (indépendante du compte)
-- `@aviconnect_notifs_${userId}` — notifications par utilisateur
-- `@aviconnect_vet_profiles` — profils et catalogues vétérinaires
+> ⚠️ Le fichier `schema.sql` a divergé de la base réellement déployée sur plusieurs tables
+> (`annonces` notamment : les colonnes en production sont `eleveur`, `eleveur_id`, `produit`, `qte`,
+> `dispo`, `photos`… et l'`id` est un entier, pas un uuid). En cas de doute, se fier aux requêtes des
+> contextes et aux fichiers de migration, pas à `schema.sql`.
+
+La sécurité repose entièrement sur les politiques RLS : voir `SECURITY.md`.
 
 ### Contextes (providers imbriqués dans `app/_layout.tsx`)
 
 ```
-AuthProvider → AnnoncesProvider → OrdersProvider → PubProvider
-→ BesoinProvider → ActualitesProvider → VetProvider → DrawerProvider
+AuthProvider → ModerationProvider → AnnoncesProvider → OrdersProvider → PubProvider
+→ BesoinProvider → ActualitesProvider → VetProvider → RewardsProvider
+→ BoostProvider → FavoritesProvider → DrawerProvider
 ```
+
+`ModerationProvider` doit rester **au-dessus** d'`AnnoncesProvider` et de `BesoinProvider` : ces
+deux contextes l'utilisent pour masquer les contenus des utilisateurs bloqués.
 
 | Contexte | Fichier | Rôle |
 |---|---|---|
 | `AuthContext` | `hooks/AuthContext.tsx` | Auth, block/unblock/delete user, statuts certification |
+| `ModerationContext` | `hooks/ModerationContext.tsx` | Signalement de contenu et blocage entre utilisateurs (Apple 1.2) |
 | `AnnoncesContext` | `hooks/AnnoncesContext.tsx` | Annonces + notifications (fusion clé admin fixe au login) |
 | `VetContext` | `hooks/VetContext.tsx` | Profils et catalogues vétérinaires |
 | `DrawerContext` | `hooks/DrawerContext.tsx` | Ouverture/fermeture du menu burger (overlay global) |
@@ -73,7 +84,8 @@ Le bouton central de la tab bar affiche `+` (publier) pour eleveur/couvoir, `�
 
 - `app/(auth)/` — login, OTP, register (non authentifié)
 - `app/(tabs)/` — onglets principaux (authentifié)
-- `app/admin/` — panel admin (eleveur, couvoirs, vétérinaires, pubs, actualités, modération, utilisateurs)
+- `app/admin/` — panel admin (couvoirs, vétérinaires, pubs, actualités, modération, boosts, utilisateurs, analytics, `annonceurs` = kit média)
+- `app/mes-blocages/` — liste des utilisateurs bloqués, avec déblocage
 - `app/veterinaires/` — liste publique des vétérinaires certifiés
 - `app/veterinaire/[id].tsx` — profil public vétérinaire + catalogue
 - `app/mon-catalogue/` — gestion catalogue par le vétérinaire lui-même
@@ -94,11 +106,13 @@ Le `DrawerMenu` est un overlay global rendu dans `app/_layout.tsx` au-dessus du 
 
 ### Notifications admin
 
-À l'inscription d'un couvoir/vétérinaire, la notif est stockée dans deux clés :
-1. `@aviconnect_notifs_admin` (clé fixe, fonctionne même sans compte admin créé)
-2. `@aviconnect_notifs_${adminId}` (si un admin existe déjà)
+Les notifications admin sont générées **côté serveur**, par trigger PostgreSQL, et insérées dans la
+table `notifications` pour chaque compte ayant le rôle `admin` :
 
-Au login admin, `AnnoncesContext` fusionne les deux sources et vide la clé fixe.
+- inscription d'un couvoir ou d'un vétérinaire → `notify_admins_on_signup` (`schema.sql`)
+- nouveau signalement de contenu → `notify_admins_on_report` (`add_moderation.sql`)
+
+Conséquence : un admin créé **après** l'événement ne recevra pas les notifications passées.
 
 ### Header pattern
 

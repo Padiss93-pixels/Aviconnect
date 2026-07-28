@@ -185,6 +185,14 @@ export default function CommandesScreen() {
                     </Text>
                   </View>
                   <Text style={styles.cardDate}>{formatDate(o.date)}</Text>
+                  {o.status === 'acceptee' && o.vendeurId && (
+                    <TouchableOpacity
+                      style={styles.avisBtn}
+                      onPress={() => router.push({ pathname: '/vendeur/[id]', params: { id: o.vendeurId! } })}
+                    >
+                      <Text style={styles.avisBtnText}>⭐ Voir le profil & laisser un avis</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               );
             })}
@@ -250,6 +258,12 @@ const styles = StyleSheet.create({
   msg: { fontSize: 16, color: Colors.textLight, textAlign: 'center', marginTop: 12, marginBottom: 20 },
   btn: { backgroundColor: Colors.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 },
   btnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  avisBtn: {
+    marginTop: 10, backgroundColor: '#FFFBF0', borderRadius: 10,
+    borderWidth: 1.5, borderColor: '#F59E0B',
+    paddingVertical: 10, alignItems: 'center',
+  },
+  avisBtnText: { fontSize: 13.5, fontWeight: '700', color: '#92600A' },
   empty: { alignItems: 'center', paddingTop: 60 },
   emptyEmoji: { fontSize: 56 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: Colors.text, marginTop: 16 },

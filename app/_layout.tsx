@@ -17,7 +17,9 @@ import {
   PlusJakartaSans_700Bold,
   PlusJakartaSans_800ExtraBold,
 } from '@expo-google-fonts/plus-jakarta-sans';
-import { AuthProvider } from '@/hooks/AuthContext';
+import { AuthProvider, useAuthContext } from '@/hooks/AuthContext';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { supabase } from '@/lib/supabase';
 import { AnnoncesProvider } from '@/hooks/AnnoncesContext';
 import { OrdersProvider } from '@/hooks/OrdersContext';
 import { PubProvider } from '@/hooks/PubContext';
@@ -25,7 +27,13 @@ import { DrawerProvider } from '@/hooks/DrawerContext';
 import { BesoinProvider } from '@/hooks/BesoinContext';
 import { ActualitesProvider } from '@/hooks/ActualitesContext';
 import { VetProvider } from '@/hooks/VetContext';
+import { RewardsProvider } from '@/hooks/RewardsContext';
+import { BoostProvider } from '@/hooks/BoostContext';
+import { FavoritesProvider } from '@/hooks/FavoritesContext';
+import { ModerationProvider } from '@/hooks/ModerationContext';
 import DrawerMenu from '@/components/DrawerMenu';
+import RewardToast from '@/components/RewardToast';
+import OfflineBanner from '@/components/OfflineBanner';
 import { Colors } from '@/constants/Colors';
 
 const theme = {
@@ -38,6 +46,23 @@ const theme = {
 };
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+function VisitLogger() {
+  const { user } = useAuthContext();
+  useEffect(() => {
+    if (!user?.id) return;
+    supabase.from('app_visits').insert({
+      user_id: user.id,
+      platform: Platform.OS,
+    }).then(() => {});
+  }, [user?.id]);
+  return null;
+}
+
+function PushRegistrar() {
+  usePushNotifications();
+  return null;
+}
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -62,13 +87,19 @@ export default function RootLayout() {
   return (
     <PaperProvider theme={theme}>
       <AuthProvider>
+      <ModerationProvider>
       <AnnoncesProvider>
       <OrdersProvider>
       <PubProvider>
       <BesoinProvider>
       <ActualitesProvider>
       <VetProvider>
+      <RewardsProvider>
+      <BoostProvider>
+      <FavoritesProvider>
       <DrawerProvider>
+        <VisitLogger />
+        <PushRegistrar />
         <StatusBar style="light" backgroundColor={Colors.primary} />
         {/* Colonne centrée sur web large ; transparent sur mobile (<760px, aucun effet) */}
         <View style={{ flex: 1, backgroundColor: '#EFE7D8' }}>
@@ -76,12 +107,14 @@ export default function RootLayout() {
           flex: 1, width: '100%', maxWidth: 760, alignSelf: 'center',
           ...(Platform.OS === 'web' ? { boxShadow: '0 0 48px rgba(36,31,25,0.10)' } as any : {}),
         }}>
+          <OfflineBanner />
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(auth)/forgot-password" options={{ headerShown: false }} />
-            <Stack.Screen name="lot/[id]" options={{ headerShown: true, title: 'Détail annonce', headerStyle: { backgroundColor: Colors.primary }, headerTintColor: '#fff' }} />
-            <Stack.Screen name="couvoir/[id]" options={{ headerShown: true, title: 'Couvoir', headerStyle: { backgroundColor: Colors.primary }, headerTintColor: '#fff' }} />
+            <Stack.Screen name="reset-password" options={{ headerShown: false }} />
+            <Stack.Screen name="lot/[id]" options={{ headerShown: false }} />
+            <Stack.Screen name="couvoir/[id]" options={{ headerShown: false }} />
             <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
             <Stack.Screen name="commander/[id]" options={{ headerShown: false }} />
             <Stack.Screen name="aide/index" options={{ headerShown: false }} />
@@ -109,18 +142,34 @@ export default function RootLayout() {
             <Stack.Screen name="veterinaire/[id]" options={{ headerShown: false }} />
             <Stack.Screen name="admin/veterinaires" options={{ headerShown: false }} />
             <Stack.Screen name="mon-catalogue/index" options={{ headerShown: false }} />
+            <Stack.Screen name="recompenses/index" options={{ headerShown: false }} />
+            <Stack.Screen name="boost/[id]" options={{ headerShown: false }} />
+            <Stack.Screen name="vendeur/[id]" options={{ headerShown: false }} />
+            <Stack.Screen name="mes-favoris/index" options={{ headerShown: false }} />
+            <Stack.Screen name="mes-blocages/index" options={{ headerShown: false }} />
+            <Stack.Screen name="abonnement/index" options={{ headerShown: false }} />
+            <Stack.Screen name="admin/boosts" options={{ headerShown: false }} />
+            <Stack.Screen name="admin/analytics" options={{ headerShown: false }} />
+            <Stack.Screen name="admin/annonceurs" options={{ headerShown: false }} />
           </Stack>
           {/* Drawer superposé sur toute l'appli */}
           <DrawerMenu />
+          {/* Toast global de récompenses (XP, badges, niveaux) */}
+          <RewardToast />
+
         </View>
         </View>
       </DrawerProvider>
+      </FavoritesProvider>
+      </BoostProvider>
+      </RewardsProvider>
       </VetProvider>
       </ActualitesProvider>
       </BesoinProvider>
       </PubProvider>
       </OrdersProvider>
       </AnnoncesProvider>
+      </ModerationProvider>
       </AuthProvider>
     </PaperProvider>
   );

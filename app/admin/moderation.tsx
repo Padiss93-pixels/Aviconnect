@@ -9,19 +9,64 @@ import { Colors } from '@/constants/Colors';
 import { useAuthContext } from '@/hooks/AuthContext';
 import { useAnnonces } from '@/hooks/AnnoncesContext';
 import { useBesoins } from '@/hooks/BesoinContext';
+import { MOTIF_LABELS, type ReportMotif } from '@/hooks/ModerationContext';
+import { supabase } from '@/lib/supabase';
 import { PRODUCT_LABELS, PRODUCT_EMOJIS } from '@/constants/mockData';
+
+// Signalements remontés par les utilisateurs (table `reports`, voir
+// supabase/add_moderation.sql). Le traitement de ces signalements est
+// l'exigence de modération d'Apple 1.2 et de Google Play.
+type Report = {
+  id: number;
+  target_type: string;
+  target_id: string;
+  target_label: string | null;
+  motif: ReportMotif;
+  details: string | null;
+  statut: 'ouvert' | 'traite' | 'rejete';
+  created_at: string;
+  reported_user_id: string | null;
+  reporter: { prenom: string; nom: string } | null;
+  reported: { prenom: string; nom: string } | null;
+};
 
 export default function AdminModeration() {
   const { user, isAdmin, isLoading: authLoading } = useAuthContext();
   const { annonces, deleteAnnonce } = useAnnonces();
   const { besoins, deleteBesoin } = useBesoins();
-  const [tab, setTab] = useState<'annonces' | 'besoins'>('annonces');
+  const [tab, setTab] = useState<'signalements' | 'annonces' | 'besoins'>('signalements');
+  const [reports, setReports] = useState<Report[]>([]);
+  const [reportsLoading, setReportsLoading] = useState(true);
 
   useEffect(() => {
     if (!authLoading && !isAdmin) {
       router.replace('/(tabs)' as any);
     }
   }, [authLoading, isAdmin]);
+
+  const loadReports = async () => {
+    setReportsLoading(true);
+    const { data, error } = await supabase
+      .from('reports')
+      .select('*, reporter:reporter_id(prenom, nom), reported:reported_user_id(prenom, nom)')
+      .order('created_at', { ascending: false });
+    if (error) console.error('[AviConnect] fetch reports error:', error.message);
+    setReports((data as unknown as Report[]) ?? []);
+    setReportsLoading(false);
+  };
+
+  useEffect(() => { if (isAdmin) loadReports(); }, [isAdmin]);
+
+  const setReportStatut = async (id: number, statut: 'traite' | 'rejete') => {
+    const { error } = await supabase
+      .from('reports')
+      .update({ statut, handled_at: new Date().toISOString(), handled_by: user?.id })
+      .eq('id', id);
+    if (error) { console.error('[AviConnect] update report error:', error.message); return; }
+    setReports((prev) => prev.map((r) => (r.id === id ? { ...r, statut } : r)));
+  };
+
+  const openReports = reports.filter((r) => r.statut === 'ouvert');
 
   if (authLoading || !user || !isAdmin) {
     return (
@@ -74,6 +119,15 @@ export default function AdminModeration() {
       {/* Tabs */}
       <View style={styles.tabs}>
         <TouchableOpacity
+          style={[styles.tab, tab === 'signalements' && styles.tabActive]}
+          onPress={() => setTab('signalements')}
+        >
+          <Ionicons name="flag-outline" size={16} color={tab === 'signalements' ? Colors.primary : Colors.textMuted} />
+          <Text style={[styles.tabText, tab === 'signalements' && styles.tabTextActive]}>
+            Signalements{openReports.length > 0 ? ` (${openReports.length})` : ''}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
           style={[styles.tab, tab === 'annonces' && styles.tabActive]}
           onPress={() => setTab('annonces')}
         >
@@ -92,6 +146,83 @@ export default function AdminModeration() {
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* ── SIGNALEMENTS ── */}
+      {tab === 'signalements' && (
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+          showsVerticalScrollIndicator={false}
+        >
+          {reportsLoading ? (
+            <ActivityIndicator color={Colors.primary} style={{ marginTop: 40 }} />
+          ) : reports.length === 0 ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyEmoji}>🚩</Text>
+              <Text style={styles.emptyText}>Aucun signalement</Text>
+            </View>
+          ) : (
+            reports.map((r) => (
+              <View key={r.id} style={styles.card}>
+                <View style={styles.cardTop}>
+                  <Text style={styles.cardEmoji}>🚩</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.cardTitre} numberOfLines={2}>
+                      {MOTIF_LABELS[r.motif] ?? r.motif}
+                    </Text>
+                    <Text style={styles.cardMeta}>
+                      {r.target_type} · {r.target_label ?? `#${r.target_id}`}
+                    </Text>
+                    <Text style={styles.cardAuteur}>
+                      signalé par {r.reporter ? `${r.reporter.prenom} ${r.reporter.nom}` : 'un utilisateur'}
+                      {r.reported ? ` · auteur : ${r.reported.prenom} ${r.reported.nom}` : ''}
+                    </Text>
+                  </View>
+                  <View style={[styles.statutChip, r.statut !== 'ouvert' && styles.statutChipDone]}>
+                    <Text style={[styles.statutText, r.statut !== 'ouvert' && styles.statutTextDone]}>
+                      {r.statut === 'ouvert' ? 'à traiter' : r.statut === 'traite' ? 'traité' : 'rejeté'}
+                    </Text>
+                  </View>
+                </View>
+
+                {r.details ? <Text style={styles.detail}>« {r.details} »</Text> : null}
+
+                <View style={styles.infoRow}>
+                  {r.target_type === 'annonce' && (
+                    <TouchableOpacity
+                      style={styles.actionBtn}
+                      onPress={() => router.push({ pathname: '/lot/[id]', params: { id: r.target_id } })}
+                    >
+                      <Text style={styles.actionBtnText}>Voir l'annonce</Text>
+                    </TouchableOpacity>
+                  )}
+                  {r.reported_user_id && (
+                    <TouchableOpacity
+                      style={styles.actionBtn}
+                      onPress={() => router.push({ pathname: '/vendeur/[id]', params: { id: r.reported_user_id! } })}
+                    >
+                      <Text style={styles.actionBtnText}>Voir le profil</Text>
+                    </TouchableOpacity>
+                  )}
+                  {r.statut === 'ouvert' && (
+                    <>
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.actionBtnPrimary]}
+                        onPress={() => setReportStatut(r.id, 'traite')}
+                      >
+                        <Text style={[styles.actionBtnText, styles.actionBtnTextPrimary]}>Marquer traité</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.actionBtn} onPress={() => setReportStatut(r.id, 'rejete')}>
+                        <Text style={styles.actionBtnText}>Rejeter</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </View>
+              </View>
+            ))
+          )}
+        </ScrollView>
+      )}
 
       {/* ── ANNONCES ── */}
       {tab === 'annonces' && (
@@ -254,6 +385,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10, paddingVertical: 4,
   },
   chipText: { fontSize: 12, fontWeight: '600', color: Colors.primaryDark },
-  detail: { fontSize: 12, color: Colors.textMuted, marginTop: 4, width: '100%' },
+  detail: { fontSize: 12, color: Colors.textMuted, marginTop: 4, marginBottom: 8, width: '100%', fontStyle: 'italic' },
+
+  statutChip: {
+    borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4,
+    backgroundColor: '#fff5f5', borderWidth: 1, borderColor: '#fecaca',
+  },
+  statutChipDone: { backgroundColor: Colors.primaryLight, borderColor: Colors.primaryTint },
+  statutText: { fontSize: 11, fontWeight: '700', color: Colors.error },
+  statutTextDone: { color: Colors.primaryDark },
+
+  actionBtn: {
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7,
+    backgroundColor: Colors.surfaceSecondary,
+  },
+  actionBtnPrimary: { backgroundColor: Colors.primary },
+  actionBtnText: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary },
+  actionBtnTextPrimary: { color: '#fff' },
 });
 

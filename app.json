@@ -18,7 +18,10 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "sn.aviconnect.app",
-      "buildNumber": "1"
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -27,10 +30,14 @@
       },
       "package": "sn.aviconnect.app",
       "versionCode": 1,
-      "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+      "allowBackup": false,
+      "usesCleartextTraffic": false,
+      "permissions": [],
+      "blockedPermissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ]
     },
     "web": {
@@ -48,10 +55,26 @@
           "color": "#1E7A45"
         }
       ],
-      "expo-asset"
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "AviConnect accède à vos photos uniquement pour illustrer vos annonces, votre profil et votre catalogue.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      "expo-asset",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1ea9cd70-691e-41f1-9113-d26c031d33b2"
+      }
+    },
+    "owner": "adamasidibe221"
   }
 }

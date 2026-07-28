@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform, TextInput, Linking } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform, TextInput, Linking, Image } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
@@ -71,9 +71,13 @@ export default function CouvoirsScreen() {
           return (
             <View key={c.id} style={styles.card}>
               <View style={styles.cardTop}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{initiales}</Text>
-                </View>
+                {c.photo ? (
+                  <Image source={{ uri: c.photo }} style={styles.avatarImg} />
+                ) : (
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>{initiales}</Text>
+                  </View>
+                )}
                 <View style={{ flex: 1 }}>
                   <View style={styles.nameRow}>
                     <Text style={styles.cardName}>{c.prenom} {c.nom}</Text>
@@ -164,6 +168,7 @@ const styles = StyleSheet.create({
     }),
   },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+  avatarImg: { width: 54, height: 54, borderRadius: 17 },
   avatar: {
     width: 54, height: 54, borderRadius: 17,
     backgroundColor: Colors.primaryLight, justifyContent: 'center', alignItems: 'center',

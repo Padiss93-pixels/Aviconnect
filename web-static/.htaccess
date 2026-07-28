@@ -1,0 +1,78 @@
+# AviConnect — configuration Apache (hébergement cPanel Nindohost)
+# Copié automatiquement dans dist/ par `npm run build:web`.
+# Inutile sur Vercel, qui ignore ce fichier.
+
+Options -Indexes
+DirectoryIndex index.html
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # 1. Forcer le HTTPS
+  RewriteCond %{HTTPS} !=on
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+  # 2. Canoniser sur aviconnect.sn (sans www)
+  RewriteCond %{HTTP_HOST} ^www\.aviconnect\.sn$ [NC]
+  RewriteRule ^ https://aviconnect.sn%{REQUEST_URI} [L,R=301]
+
+  # 3. Les fichiers et dossiers réels sont servis tels quels
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # 4. /conditions -> /conditions.html quand le fichier existe
+  RewriteCond %{DOCUMENT_ROOT}/$1.html -f
+  RewriteRule ^(.+?)/?$ /$1.html [L]
+
+  # 5. Toutes les autres routes (dont /lot/12, /vendeur/abc) sont rendues
+  #    côté client par Expo Router
+  RewriteRule ^ /index.html [L]
+</IfModule>
+
+# ── Types MIME ──────────────────────────────────────────────────────────────
+<IfModule mod_mime.c>
+  AddType application/javascript          .js
+  AddType application/json                .json
+  AddType application/manifest+json       .webmanifest
+  AddType font/woff2                      .woff2
+  AddType image/svg+xml                   .svg
+  <Files "apple-app-site-association">
+    ForceType application/json
+  </Files>
+</IfModule>
+
+# ── Compression ─────────────────────────────────────────────────────────────
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/plain text/xml
+  AddOutputFilterByType DEFLATE application/javascript application/json application/xml
+  AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>
+
+# ── Cache ───────────────────────────────────────────────────────────────────
+# Les bundles JS portent un hash dans leur nom : cache long sans risque.
+# Le HTML n'est jamais mis en cache, pour que les mises à jour soient immédiates.
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/html                 "access plus 0 seconds"
+  ExpiresByType text/css                  "access plus 1 year"
+  ExpiresByType application/javascript    "access plus 1 year"
+  ExpiresByType image/png                 "access plus 6 months"
+  ExpiresByType image/jpeg                "access plus 6 months"
+  ExpiresByType image/svg+xml             "access plus 6 months"
+  ExpiresByType font/woff2                "access plus 1 year"
+</IfModule>
+
+<IfModule mod_headers.c>
+  <FilesMatch "\.html$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
+
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+</IfModule>
+
+ErrorDocument 404 /+not-found.html

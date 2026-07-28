@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /chat/
+Disallow: /commandes
+Disallow: /transactions
+Disallow: /notifications
+Disallow: /mes-blocages
+
+Sitemap: https://aviconnect.sn/sitemap.xml

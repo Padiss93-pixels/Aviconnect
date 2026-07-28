@@ -1,8 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const KEY = '@aviconnect_actualites';
+import { supabase } from '@/lib/supabase';
 
 export type Categorie = 'sante' | 'vaccin' | 'virus' | 'metier' | 'marche' | 'reglementation' | 'conseil';
 
@@ -37,7 +34,7 @@ export const CATEGORIE_EMOJIS: Record<Categorie, string> = {
 };
 
 export type Actualite = {
-  id: number;
+  id: string;
   titre: string;
   resume: string;
   contenu: string;
@@ -48,103 +45,62 @@ export type Actualite = {
   imageEmoji?: string;
 };
 
-// Articles mock pour démarrer avec du contenu
-const MOCK_ACTUALITES: Actualite[] = [
-  {
-    id: 1,
-    titre: 'Alerte : Gripppe Aviaire détectée dans la région de Thiès',
-    resume: 'Des cas de grippe aviaire H5N1 ont été signalés dans plusieurs élevages. Les autorités recommandent des mesures préventives immédiates.',
-    contenu: `Des cas de grippe aviaire (H5N1) ont été confirmés dans la région de Thiès. Voici les mesures à prendre immédiatement :\n\n• Isoler les animaux malades du reste du troupeau\n• Contacter immédiatement votre vétérinaire\n• Ne pas déplacer les volailles entre élevages\n• Désinfecter les équipements et les locaux\n• Signaler tout cas suspect aux autorités sanitaires\n\nLes symptômes à surveiller : mortalité soudaine, difficultés respiratoires, chute de la production d'œufs, gonflement de la tête et du cou.\n\nLe Ministère de l'Élevage a mis en place une cellule de crise. Numéro d'urgence : 33 889 10 10.`,
-    categorie: 'virus',
-    auteurId: 'admin',
-    auteurNom: 'AviConnect Admin',
-    createdAt: '2026-07-05',
-    imageEmoji: '🦠',
-  },
-  {
-    id: 2,
-    titre: 'Calendrier de vaccination 2026 pour les poulets de chair',
-    resume: 'Le nouveau calendrier vaccinal recommandé par le DIREL est disponible. Retrouvez les dates et vaccins essentiels pour protéger votre élevage.',
-    contenu: `Le DIREL (Direction de l'Élevage) a publié le calendrier de vaccination 2026 pour les poulets de chair.\n\n**Semaine 1 (Jour 1)**\n• Marek : à l'écloserie\n• Newcastle (souche HB1) : spray ou eau de boisson\n\n**Semaine 2 (Jour 7-10)**\n• Gumboro (IBD) : eau de boisson\n• Bronchite Infectieuse : spray\n\n**Semaine 3 (Jour 18-21)**\n• Rappel Newcastle (souche La Sota)\n• Rappel Gumboro si nécessaire\n\n**Semaine 5 (Jour 35)**\n• Newcastle (vaccin huileux) : injection\n\nContactez votre vétérinaire pour adapter ce protocole à votre situation spécifique.`,
-    categorie: 'vaccin',
-    auteurId: 'admin',
-    auteurNom: 'AviConnect Admin',
-    createdAt: '2026-07-01',
-    imageEmoji: '💉',
-  },
-  {
-    id: 3,
-    titre: 'Prix du maïs : hausse de 15% attendue ce trimestre',
-    resume: 'Les cours du maïs sur les marchés internationaux impactent les prix locaux de l\'aliment. Comment anticiper et gérer la hausse des coûts d\'élevage.',
-    contenu: `Les prix du maïs sur les marchés internationaux ont augmenté de 15% ces dernières semaines, une hausse qui va se répercuter sur le coût de l'aliment pour volailles au Sénégal.\n\n**Impact estimé :**\n• Augmentation du coût de l'aliment : +8 à 12%\n• Répercussion possible sur les prix de vente\n\n**Conseils pour limiter l'impact :**\n1. Acheter et stocker l'aliment avant la hausse\n2. Négocier des contrats à prix fixe avec vos fournisseurs\n3. Optimiser la consommation alimentaire (réduire les gaspillages)\n4. Considérer des alternatives comme le sorgho local\n\nLes éleveurs peuvent contacter la FAFA-SN (Fédération des Acteurs de la Filière Avicole) pour des achats groupés.`,
-    categorie: 'marche',
-    auteurId: 'admin',
-    auteurNom: 'AviConnect Admin',
-    createdAt: '2026-06-28',
-    imageEmoji: '📈',
-  },
-  {
-    id: 4,
-    titre: 'Bonnes pratiques de biosécurité en élevage avicole',
-    resume: 'Adoptez ces 10 règles d\'or pour protéger votre élevage contre les maladies et améliorer vos performances.',
-    contenu: `La biosécurité est la première ligne de défense contre les maladies. Voici les 10 règles d'or :\n\n1. **Contrôler les entrées** : Personne n'entre dans le poulailler sans vêtements et chaussures propres\n2. **Pédiluves** : Placer des bacs désinfectants à chaque entrée, les renouveler régulièrement\n3. **Quarantaine** : Tout nouvel animal doit être isolé 2 à 3 semaines avant d'intégrer le troupeau\n4. **Eau potable** : Traiter l'eau à la javel (1 ml pour 10 litres)\n5. **Nettoyage quotidien** : Retirer les fientes chaque jour, elles sont source de maladies\n6. **Vide sanitaire** : 3 semaines minimum entre deux lots\n7. **Grillages** : Empêcher le contact avec les oiseaux sauvages\n8. **Rongeurs** : Dératiser régulièrement\n9. **Visiteurs** : Limiter les visites et les enregistrer\n10. **Mortalité** : Incinérer ou enterrer les carcasses loin de l'élevage`,
-    categorie: 'conseil',
-    auteurId: 'admin',
-    auteurNom: 'AviConnect Admin',
-    createdAt: '2026-06-20',
-    imageEmoji: '💡',
-  },
-];
-
-async function readStorage(): Promise<Actualite[]> {
-  try {
-    const raw = Platform.OS === 'web' ? localStorage.getItem(KEY) : await AsyncStorage.getItem(KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-
-async function writeStorage(items: Actualite[]): Promise<void> {
-  try {
-    const json = JSON.stringify(items);
-    if (Platform.OS === 'web') localStorage.setItem(KEY, json);
-    else await AsyncStorage.setItem(KEY, json);
-  } catch {}
+function rowToActualite(row: any): Actualite {
+  return {
+    id: row.id,
+    titre: row.titre,
+    resume: row.resume ?? '',
+    contenu: row.contenu,
+    categorie: (row.categorie ?? 'conseil') as Categorie,
+    auteurId: row.auteur_id ?? 'admin',
+    auteurNom: row.auteur_nom ?? 'AviConnect Admin',
+    createdAt: row.created_at,
+    imageEmoji: row.image_emoji ?? undefined,
+  };
 }
 
 type ActualitesContextType = {
-  actualites: Actualite[];       // user-created + mock merged
-  addActualite: (a: Actualite) => Promise<void>;
-  deleteActualite: (id: number) => Promise<void>;
+  actualites: Actualite[];
+  addActualite: (a: Omit<Actualite, 'id' | 'createdAt'>) => Promise<void>;
+  deleteActualite: (id: string) => Promise<void>;
 };
 
 const ActualitesContext = createContext<ActualitesContextType>({
-  actualites: MOCK_ACTUALITES,
+  actualites: [],
   addActualite: async () => {},
   deleteActualite: async () => {},
 });
 
 export function ActualitesProvider({ children }: { children: React.ReactNode }) {
-  const [userActus, setUserActus] = useState<Actualite[]>([]);
+  const [actualites, setActualites] = useState<Actualite[]>([]);
 
-  useEffect(() => { readStorage().then(setUserActus); }, []);
+  useEffect(() => {
+    supabase
+      .from('actualites')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (data) setActualites(data.map(rowToActualite));
+      });
+  }, []);
 
-  const actualites = (() => {
-    const mockIds = new Set(MOCK_ACTUALITES.map((a) => a.id));
-    const unique = userActus.filter((a) => !mockIds.has(a.id));
-    return [...unique, ...MOCK_ACTUALITES].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  })();
+  const addActualite = useCallback(async (a: Omit<Actualite, 'id' | 'createdAt'>) => {
+    const { data, error } = await supabase.from('actualites').insert({
+      titre: a.titre,
+      resume: a.resume,
+      contenu: a.contenu,
+      categorie: a.categorie,
+      auteur_id: a.auteurId,
+      auteur_nom: a.auteurNom,
+      image_emoji: a.imageEmoji ?? null,
+    }).select().single();
+    if (!error && data) setActualites((prev) => [rowToActualite(data), ...prev]);
+  }, []);
 
-  const addActualite = useCallback(async (a: Actualite) => {
-    const updated = [a, ...userActus];
-    setUserActus(updated);
-    await writeStorage(updated);
-  }, [userActus]);
-
-  const deleteActualite = useCallback(async (id: number) => {
-    const updated = userActus.filter((a) => a.id !== id);
-    setUserActus(updated);
-    await writeStorage(updated);
-  }, [userActus]);
+  const deleteActualite = useCallback(async (id: string) => {
+    await supabase.from('actualites').delete().eq('id', id);
+    setActualites((prev) => prev.filter((a) => a.id !== id));
+  }, []);
 
   return (
     <ActualitesContext.Provider value={{ actualites, addActualite, deleteActualite }}>

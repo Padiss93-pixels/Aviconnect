@@ -1,23 +1,50 @@
 {
   "cli": {
-    "version": ">= 5.9.1"
+    "version": ">= 5.9.1",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ctnmflsyueqtwvhcksqz.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0bm1mbHN5dWVxdHd2aGNrc3F6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1NTkyNjcsImV4cCI6MjEwMDEzNTI2N30.RDOp98Md43CF3HVV17PosQCkoT3Rtmgnvs19Cypl4GE"
+      }
     },
     "preview": {
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ctnmflsyueqtwvhcksqz.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0bm1mbHN5dWVxdHd2aGNrc3F6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1NTkyNjcsImV4cCI6MjEwMDEzNTI2N30.RDOp98Md43CF3HVV17PosQCkoT3Rtmgnvs19Cypl4GE"
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ctnmflsyueqtwvhcksqz.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0bm1mbHN5dWVxdHd2aGNrc3F6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1NTkyNjcsImV4cCI6MjEwMDEzNTI2N30.RDOp98Md43CF3HVV17PosQCkoT3Rtmgnvs19Cypl4GE"
+      }
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "./credentials/google-play-service-account.json",
+        "track": "internal",
+        "releaseStatus": "draft"
+      },
+      "ios": {
+        "appleId": "adamasidibe93@icloud.com",
+        "ascAppId": "A_REMPLIR_APP_STORE_CONNECT_APP_ID",
+        "appleTeamId": "A_REMPLIR_APPLE_TEAM_ID"
+      }
+    }
   }
 }

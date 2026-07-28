@@ -37,12 +37,13 @@ export const Colors = {
   ink:                '#211C16',  // fond sombre pour sections contrastées
 
   // ── Textes ────────────────────────────────────────────────────────────
+  // Contrastes calibrés pour lecture en extérieur (plein soleil, écrans bas de gamme)
   text:            '#241F19',
-  textSecondary:   '#524A3E',
-  textTertiary:    '#7A7263',
-  textLight:       '#7A7263',
-  textMuted:       '#948C7C',
-  textPlaceholder: '#B3A996',
+  textSecondary:   '#4A4236',
+  textTertiary:    '#6E6555',
+  textLight:       '#6E6555',
+  textMuted:       '#7E7565',
+  textPlaceholder: '#A89D89',
   textOnDark:      '#F7F2E9',
   textOnDarkMuted: 'rgba(247,242,233,0.68)',
 

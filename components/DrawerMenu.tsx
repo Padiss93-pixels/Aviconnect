@@ -3,7 +3,10 @@ import {
   Pressable, ScrollView,
 } from 'react-native';
 import { router, usePathname } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import {
+  Home, ShoppingBag, ClipboardList, Newspaper, Receipt, MessageCircle,
+  Factory, Stethoscope, Users, Megaphone, LogOut, type LucideIcon,
+} from 'lucide-react-native';
 import { Colors } from '@/constants/Colors';
 import { Fonts } from '@/constants/theme';
 import Logo from '@/components/ui/Logo';
@@ -11,32 +14,33 @@ import { useAuthContext } from '@/hooks/AuthContext';
 import { useAnnonces } from '@/hooks/AnnoncesContext';
 import { useDrawer } from '@/hooks/DrawerContext';
 
-type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
-
 type MenuItem = {
   label: string;
-  icon: IoniconName;
+  Icon: LucideIcon;
+  // Pastille colorée derrière le picto (lisibilité)
+  tint: string;
+  tintBg: string;
   path: string;
   hasBadge?: boolean;
 };
 
 const MENU_ITEMS: MenuItem[] = [
-  { label: 'Accueil',        icon: 'home-outline',             path: '/(tabs)' },
-  { label: 'Marchés',        icon: 'bag-handle-outline',       path: '/(tabs)/marches' },
-  { label: 'Besoins',        icon: 'clipboard-outline',        path: '/besoins' },
-  { label: 'Actualités',     icon: 'newspaper-outline',        path: '/actualites' },
-  { label: 'Mes Commandes',  icon: 'receipt-outline',          path: '/commandes' },
-  { label: 'Messagerie',     icon: 'chatbubble-outline',       path: '/(tabs)/messages', hasBadge: true },
+  { label: 'Accueil',       Icon: Home,          tint: '#1E7A45', tintBg: '#E6F4EC', path: '/(tabs)' },
+  { label: 'Marchés',       Icon: ShoppingBag,   tint: '#B07A2A', tintBg: '#FBF1DF', path: '/(tabs)/marches' },
+  { label: 'Besoins',       Icon: ClipboardList, tint: '#7C4DBE', tintBg: '#F1EAFB', path: '/besoins' },
+  { label: 'Actualités',    Icon: Newspaper,     tint: '#2563EB', tintBg: '#E8EFFD', path: '/actualites' },
+  { label: 'Mes Commandes', Icon: Receipt,       tint: '#C2410C', tintBg: '#FDEEE4', path: '/commandes' },
+  { label: 'Messagerie',    Icon: MessageCircle, tint: '#0E7490', tintBg: '#E3F4F8', path: '/(tabs)/messages', hasBadge: true },
 ];
 
 const PARTNER_ITEMS: MenuItem[] = [
-  { label: 'Couvoirs certifiés',      icon: 'business-outline',  path: '/couvoirs' },
-  { label: 'Vétérinaires certifiés',  icon: 'medkit-outline',    path: '/veterinaires' },
+  { label: 'Couvoirs certifiés',     Icon: Factory,     tint: '#92400E', tintBg: '#FBF0E0', path: '/couvoirs' },
+  { label: 'Vétérinaires certifiés', Icon: Stethoscope, tint: '#0F766E', tintBg: '#E2F3F1', path: '/veterinaires' },
 ];
 
 const ADMIN_ITEMS: MenuItem[] = [
-  { label: 'Gestion utilisateurs', icon: 'people-outline',   path: '/admin' },
-  { label: 'Publicités',           icon: 'megaphone-outline', path: '/admin/pubs' },
+  { label: 'Gestion utilisateurs', Icon: Users,     tint: '#374151', tintBg: '#EDEFF2', path: '/admin' },
+  { label: 'Publicités',           Icon: Megaphone, tint: '#BE185D', tintBg: '#FBE7F0', path: '/admin/pubs' },
 ];
 
 export default function DrawerMenu() {
@@ -55,6 +59,7 @@ export default function DrawerMenu() {
     eleveur: 'Éleveur',
     acheteur: 'Acheteur',
     couvoir: 'Couvoir',
+    veterinaire: 'Vétérinaire',
     admin: 'Administrateur',
   };
 
@@ -120,12 +125,9 @@ export default function DrawerMenu() {
                 onPress={() => navigate(item.path)}
                 activeOpacity={0.7}
               >
-                <Ionicons
-                  name={item.icon}
-                  size={22}
-                  color={active ? Colors.primary : '#6b7280'}
-                  style={styles.menuIcon}
-                />
+                <View style={[styles.iconTile, { backgroundColor: active ? Colors.primary : item.tintBg }]}>
+                  <item.Icon size={19} color={active ? '#fff' : item.tint} strokeWidth={2.1} />
+                </View>
                 <Text style={[styles.menuLabel, active && styles.menuLabelActive]}>
                   {item.label}
                 </Text>
@@ -141,34 +143,44 @@ export default function DrawerMenu() {
           {/* PARTENAIRES */}
           <View style={styles.separator} />
           <Text style={styles.sectionLabel}>PARTENAIRES</Text>
-          {PARTNER_ITEMS.map((item) => (
-            <TouchableOpacity
-              key={item.label}
-              style={styles.menuItem}
-              onPress={() => navigate(item.path)}
-              activeOpacity={0.7}
-            >
-              <Ionicons name={item.icon} size={22} color="#6b7280" style={styles.menuIcon} />
-              <Text style={styles.menuLabel}>{item.label}</Text>
-            </TouchableOpacity>
-          ))}
+          {PARTNER_ITEMS.map((item) => {
+            const active = isActive(item.path);
+            return (
+              <TouchableOpacity
+                key={item.label}
+                style={[styles.menuItem, active && styles.menuItemActive]}
+                onPress={() => navigate(item.path)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.iconTile, { backgroundColor: active ? Colors.primary : item.tintBg }]}>
+                  <item.Icon size={19} color={active ? '#fff' : item.tint} strokeWidth={2.1} />
+                </View>
+                <Text style={[styles.menuLabel, active && styles.menuLabelActive]}>{item.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
 
           {/* ADMINISTRATION */}
           {isAdmin && (
             <>
               <View style={styles.separator} />
               <Text style={styles.sectionLabel}>ADMINISTRATION</Text>
-              {ADMIN_ITEMS.map((item) => (
-                <TouchableOpacity
-                  key={item.label}
-                  style={styles.menuItem}
-                  onPress={() => navigate(item.path)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name={item.icon} size={22} color="#6b7280" style={styles.menuIcon} />
-                  <Text style={styles.menuLabel}>{item.label}</Text>
-                </TouchableOpacity>
-              ))}
+              {ADMIN_ITEMS.map((item) => {
+                const active = isActive(item.path);
+                return (
+                  <TouchableOpacity
+                    key={item.label}
+                    style={[styles.menuItem, active && styles.menuItemActive]}
+                    onPress={() => navigate(item.path)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.iconTile, { backgroundColor: active ? Colors.primary : item.tintBg }]}>
+                      <item.Icon size={19} color={active ? '#fff' : item.tint} strokeWidth={2.1} />
+                    </View>
+                    <Text style={[styles.menuLabel, active && styles.menuLabelActive]}>{item.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </>
           )}
 
@@ -180,7 +192,9 @@ export default function DrawerMenu() {
                 style={styles.menuItem}
                 onPress={async () => { close(); await signOut(); router.replace('/(tabs)'); }}
               >
-                <Ionicons name="log-out-outline" size={22} color={Colors.error} style={styles.menuIcon} />
+                <View style={[styles.iconTile, { backgroundColor: '#FDEBE9' }]}>
+                  <LogOut size={19} color={Colors.error} strokeWidth={2.1} />
+                </View>
                 <Text style={[styles.menuLabel, { color: Colors.error }]}>Se déconnecter</Text>
               </TouchableOpacity>
             </>
@@ -264,13 +278,16 @@ const styles = StyleSheet.create({
     marginTop: 10, marginBottom: 4,
   },
   menuItem: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 12,
-    marginHorizontal: 8, borderRadius: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingHorizontal: 12, paddingVertical: 8,
+    marginHorizontal: 8, marginVertical: 2, borderRadius: 12,
   },
   menuItemActive: { backgroundColor: '#f0fdf4' },
-  menuIcon: { width: 28 },
-  menuLabel: { fontSize: 15, color: '#374151', fontWeight: '500', flex: 1 },
+  iconTile: {
+    width: 36, height: 36, borderRadius: 11,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  menuLabel: { fontSize: 15, color: '#1f2937', fontWeight: '600', flex: 1 },
   menuLabelActive: { color: Colors.primary, fontWeight: '700' },
 
   badgePill: {

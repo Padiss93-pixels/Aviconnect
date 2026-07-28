@@ -12,10 +12,8 @@ export default function BesoinsScreen() {
   const { besoins: userBesoins } = useBesoins();
   const { unreadCount } = useAnnonces();
 
-  // Merge : besoins publiés par les acheteurs en premier, puis les mock
-  const mockIds = new Set(BESOINS.map((b) => b.id));
-  const uniqueUser = userBesoins.filter((b) => !mockIds.has(b.id));
-  const allBesoins = [...uniqueUser, ...BESOINS];
+  // Besoins Supabase en priorité ; si vide, afficher les mocks
+  const allBesoins = userBesoins.length > 0 ? userBesoins : BESOINS;
 
   const isAcheteur = user?.role === 'acheteur';
 

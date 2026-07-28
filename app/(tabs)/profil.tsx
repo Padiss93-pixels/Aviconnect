@@ -7,14 +7,15 @@ import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   BadgeCheck, Bell, BookOpen, Camera, ChevronRight, ClipboardList,
-  Eye, FileText, LifeBuoy, LogOut, MapPin, Megaphone, Package,
-  Pencil, Phone, ShieldCheck, Trash2, UserRound, Users, Warehouse, X,
+  Cookie, Eye, Factory, FileText, Flame, Handshake, Landmark, LifeBuoy, LogOut, MapPin,
+  Megaphone, Package, Pencil, Phone, Scale, ShieldCheck, ShieldOff, Stethoscope, Trash2,
+  TrendingUp, UserRound, Users, Warehouse, X, Zap,
 } from 'lucide-react-native';
 import { Colors, Fonts, Radius, Shadows } from '@/constants/theme';
 import { useAuthContext } from '@/hooks/AuthContext';
-import { storeUser } from '@/hooks/useAuth';
 import { REGIONS, PRODUCT_EMOJIS } from '@/constants/mockData';
 import { useAnnonces } from '@/hooks/AnnoncesContext';
+import { useRewards, getLevel } from '@/hooks/RewardsContext';
 
 const ROLE_LABELS: Record<string, string> = {
   eleveur: 'Éleveur',
@@ -24,6 +25,15 @@ const ROLE_LABELS: Record<string, string> = {
   veterinaire: 'Vétérinaire',
 };
 
+const LEGAL_LINKS = [
+  { label: 'Conditions d\'utilisation',       path: '/conditions',       Icon: FileText },
+  { label: 'Politique de confidentialité',    path: '/confidentialite',  Icon: ShieldCheck },
+  { label: 'Mentions légales',                path: '/mentions-legales', Icon: Landmark },
+  { label: 'Mes droits (Loi n°2008-12)',      path: '/mes-droits',       Icon: Scale },
+  { label: 'Accord de traitement des données', path: '/dpa',             Icon: Handshake },
+  { label: 'Politique de cookies',            path: '/cookies',          Icon: Cookie },
+];
+
 const CERT_LABELS: Record<string, { label: string; bg: string; fg: string }> = {
   pending:   { label: 'Certification en attente', bg: 'rgba(201,154,70,0.22)', fg: '#E8C078' },
   certified: { label: 'Certifié',                 bg: 'rgba(201,154,70,0.22)', fg: '#E8C078' },
@@ -31,8 +41,9 @@ const CERT_LABELS: Record<string, { label: string; bg: string; fg: string }> = {
 };
 
 export default function ProfilScreen() {
-  const { user, signIn, signOut, isAdmin, deleteUser } = useAuthContext();
+  const { user, updateProfile, signOut, isAdmin, deleteUser } = useAuthContext();
   const { userLots, deleteAnnonce, deleteAnnoncesByAuthor } = useAnnonces();
+  const { data: rewards } = useRewards();
   const mesAnnonces = user
     ? userLots.filter((l) => l.eleveur === `${user.prenom} ${user.nom}`)
     : [];
@@ -63,8 +74,7 @@ export default function ProfilScreen() {
         reader.onload = async (ev) => {
           const photoUri = ev.target?.result as string;
           const updated = { ...user!, photo: photoUri };
-          await storeUser(updated);
-          await signIn(updated);
+          await updateProfile(updated);
           setUploadingPhoto(false);
         };
         reader.readAsDataURL(file);
@@ -87,8 +97,7 @@ export default function ProfilScreen() {
         if (!result.canceled && result.assets[0]) {
           setUploadingPhoto(true);
           const updated = { ...user!, photo: result.assets[0].uri };
-          await storeUser(updated);
-          await signIn(updated);
+          await updateProfile(updated);
           setUploadingPhoto(false);
         }
       } catch {
@@ -146,8 +155,12 @@ export default function ProfilScreen() {
     setError('');
     setSaving(true);
     const updated = { ...user, prenom, nom, phone: digits || phone, ferme, region };
-    await storeUser(updated);
-    await signIn(updated);
+    const result = await updateProfile(updated);
+    if (result.error) {
+      setError('Impossible d\'enregistrer le profil. Vérifie ta connexion.');
+      setSaving(false);
+      return;
+    }
     setSaving(false);
     setEditing(false);
     if (Platform.OS === 'web') window.alert('✅ Profil mis à jour avec succès !');
@@ -174,7 +187,7 @@ export default function ProfilScreen() {
 
   // Suppression définitive du compte (exigence Apple 5.1.1 · Loi n°2008-12)
   const doDeleteAccount = async () => {
-    await deleteAnnoncesByAuthor(`${user!.prenom} ${user!.nom}`);
+    await deleteAnnoncesByAuthor(user!.id);
     await deleteUser(user!.id);
     router.replace('/(tabs)');
   };
@@ -349,7 +362,9 @@ export default function ProfilScreen() {
 
             {user.role !== 'acheteur' && (
               <>
-                <Text style={styles.fieldLabel}>Nom de la ferme / couvoir</Text>
+                <Text style={styles.fieldLabel}>
+                  {user.role === 'couvoir' ? 'Nom du couvoir' : user.role === 'veterinaire' ? 'Nom de la clinique' : 'Nom de la ferme'}
+                </Text>
                 <TextInput
                   style={styles.fieldInput}
                   value={ferme}
@@ -388,6 +403,40 @@ export default function ProfilScreen() {
             </TouchableOpacity>
           </View>
         )}
+
+        {/* Abonnement Partenaire (couvoirs + vétérinaires) */}
+        {(user.role === 'couvoir' || user.role === 'veterinaire') && (
+          <TouchableOpacity
+            style={styles.boostProCard}
+            onPress={() => router.push('/abonnement' as any)}
+            activeOpacity={0.88}
+          >
+            <View style={styles.boostProIconBox}>
+              <Text style={{ fontSize: 20 }}>👑</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.boostProTitle}>Abonnement Partenaire</Text>
+              <Text style={styles.boostProSub}>Soyez mis en avant sur la page d'accueil · 25 000 F/mois</Text>
+            </View>
+            <ChevronRight size={17} color={Colors.gold} strokeWidth={1.8} />
+          </TouchableOpacity>
+        )}
+
+        {/* Récompenses — série, niveau, badges */}
+        <TouchableOpacity style={styles.rewardsCard} onPress={() => router.push('/recompenses' as any)} activeOpacity={0.88}>
+          <View style={styles.rewardsFlameBox}>
+            <Flame size={20} color={Colors.accent} strokeWidth={1.8} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rewardsTitle}>
+              {rewards.streak > 1 ? `Série de ${rewards.streak} jours` : 'Mes récompenses'}
+            </Text>
+            <Text style={styles.rewardsSub}>
+              {getLevel(rewards.xp).level.emoji} {getLevel(rewards.xp).level.name} · {rewards.xp.toLocaleString()} XP · {rewards.badges.length} badge{rewards.badges.length > 1 ? 's' : ''}
+            </Text>
+          </View>
+          <ChevronRight size={17} color={Colors.textMuted} strokeWidth={1.8} />
+        </TouchableOpacity>
 
         {/* Stats */}
         <View style={styles.statsRow}>
@@ -490,11 +539,39 @@ export default function ProfilScreen() {
                 <Text style={styles.linkLabel}>Gérer les publicités</Text>
                 <ChevronRight size={17} color={Colors.textMuted} strokeWidth={1.8} />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.linkRow} onPress={() => router.push('/commandes' as any)} activeOpacity={0.8}>
+              <TouchableOpacity style={[styles.linkRow, styles.rowDivider]} onPress={() => router.push('/admin/couvoirs' as any)} activeOpacity={0.8}>
+                <View style={[styles.linkIconBox, { backgroundColor: '#f0fdf4' }]}>
+                  <Factory size={17} color={Colors.primaryDark} strokeWidth={1.7} />
+                </View>
+                <Text style={styles.linkLabel}>Certification couvoirs</Text>
+                <ChevronRight size={17} color={Colors.textMuted} strokeWidth={1.8} />
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.linkRow, styles.rowDivider]} onPress={() => router.push('/admin/veterinaires' as any)} activeOpacity={0.8}>
+                <View style={[styles.linkIconBox, { backgroundColor: '#ccfbf1' }]}>
+                  <Stethoscope size={17} color="#0f766e" strokeWidth={1.7} />
+                </View>
+                <Text style={styles.linkLabel}>Certification vétérinaires</Text>
+                <ChevronRight size={17} color={Colors.textMuted} strokeWidth={1.8} />
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.linkRow, styles.rowDivider]} onPress={() => router.push('/admin/boosts' as any)} activeOpacity={0.8}>
+                <View style={[styles.linkIconBox, { backgroundColor: '#FFFBF0' }]}>
+                  <Zap size={17} color="#92600A" strokeWidth={1.7} />
+                </View>
+                <Text style={styles.linkLabel}>Boosts & abonnements</Text>
+                <ChevronRight size={17} color={Colors.textMuted} strokeWidth={1.8} />
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.linkRow, styles.rowDivider]} onPress={() => router.push('/commandes' as any)} activeOpacity={0.8}>
                 <View style={[styles.linkIconBox, { backgroundColor: Colors.accentLight }]}>
                   <ClipboardList size={17} color={Colors.accentDark} strokeWidth={1.7} />
                 </View>
                 <Text style={styles.linkLabel}>Toutes les commandes</Text>
+                <ChevronRight size={17} color={Colors.textMuted} strokeWidth={1.8} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.linkRow} onPress={() => router.push('/admin/analytics' as any)} activeOpacity={0.8}>
+                <View style={[styles.linkIconBox, { backgroundColor: '#eff6ff' }]}>
+                  <TrendingUp size={17} color="#1d4ed8" strokeWidth={1.7} />
+                </View>
+                <Text style={styles.linkLabel}>Statistiques d'audience</Text>
                 <ChevronRight size={17} color={Colors.textMuted} strokeWidth={1.8} />
               </TouchableOpacity>
             </View>
@@ -523,20 +600,42 @@ export default function ProfilScreen() {
             <Text style={styles.linkLabel}>Mes commandes</Text>
             <ChevronRight size={17} color={Colors.textMuted} strokeWidth={1.8} />
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.linkRow, styles.rowDivider]} onPress={() => router.push('/aide')} activeOpacity={0.8}>
+          <TouchableOpacity style={[styles.linkRow, styles.rowDivider]} onPress={() => router.push('/mes-blocages' as any)} activeOpacity={0.8}>
+            <View style={[styles.linkIconBox, { backgroundColor: Colors.primaryTint }]}>
+              <ShieldOff size={17} color={Colors.primaryDark} strokeWidth={1.7} />
+            </View>
+            <Text style={styles.linkLabel}>Utilisateurs bloqués</Text>
+            <ChevronRight size={17} color={Colors.textMuted} strokeWidth={1.8} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.linkRow} onPress={() => router.push('/aide')} activeOpacity={0.8}>
             <View style={[styles.linkIconBox, { backgroundColor: Colors.primaryTint }]}>
               <LifeBuoy size={17} color={Colors.primaryDark} strokeWidth={1.7} />
             </View>
             <Text style={styles.linkLabel}>Aide et support</Text>
             <ChevronRight size={17} color={Colors.textMuted} strokeWidth={1.8} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.linkRow} onPress={() => router.push('/conditions')} activeOpacity={0.8}>
-            <View style={[styles.linkIconBox, { backgroundColor: Colors.primaryTint }]}>
-              <FileText size={17} color={Colors.primaryDark} strokeWidth={1.7} />
-            </View>
-            <Text style={styles.linkLabel}>Conditions d'utilisation</Text>
-            <ChevronRight size={17} color={Colors.textMuted} strokeWidth={1.8} />
-          </TouchableOpacity>
+        </View>
+
+        {/* Légal */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionEyebrow}>Transparence</Text>
+          <Text style={styles.sectionTitle}>Légal</Text>
+        </View>
+        <View style={styles.card}>
+          {LEGAL_LINKS.map(({ label, path, Icon }, i) => (
+            <TouchableOpacity
+              key={path}
+              style={[styles.linkRow, i < LEGAL_LINKS.length - 1 && styles.rowDivider]}
+              onPress={() => router.push(path as any)}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.linkIconBox, { backgroundColor: Colors.primaryTint }]}>
+                <Icon size={17} color={Colors.primaryDark} strokeWidth={1.7} />
+              </View>
+              <Text style={styles.linkLabel}>{label}</Text>
+              <ChevronRight size={17} color={Colors.textMuted} strokeWidth={1.8} />
+            </TouchableOpacity>
+          ))}
         </View>
 
         {/* Déconnexion */}
@@ -544,6 +643,15 @@ export default function ProfilScreen() {
           <LogOut size={16} color={Colors.error} strokeWidth={1.8} />
           <Text style={styles.signOutText}>Se déconnecter</Text>
         </TouchableOpacity>
+
+        {/* Suppression du compte (exigence Apple 5.1.1) */}
+        <TouchableOpacity style={styles.deleteAccountBtn} onPress={handleDeleteAccount} activeOpacity={0.85}>
+          <Trash2 size={15} color={Colors.error} strokeWidth={1.8} />
+          <Text style={styles.deleteAccountText}>Supprimer mon compte</Text>
+        </TouchableOpacity>
+        <Text style={styles.deleteAccountHint}>
+          Suppression définitive de votre profil, de vos annonces et de vos données, conformément à notre politique de confidentialité.
+        </Text>
       </ScrollView>
     </View>
   );
@@ -660,6 +768,35 @@ const styles = StyleSheet.create({
   saveBtnDisabled: { opacity: 0.6 },
   saveBtnText: { color: '#fff', fontSize: 14.5, fontFamily: Fonts.bodyBold },
 
+  boostProCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 13,
+    backgroundColor: '#FFFBF0', marginHorizontal: 18, marginTop: 14,
+    borderRadius: Radius.lg, padding: 16,
+    borderWidth: 1.5, borderColor: Colors.gold + '66',
+  },
+  boostProIconBox: {
+    width: 44, height: 44, borderRadius: 14,
+    backgroundColor: Colors.gold + '22',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  boostProTitle: { fontSize: 14.5, fontFamily: Fonts.bodyBold, color: Colors.text, marginBottom: 3 },
+  boostProSub: { fontSize: 12, fontFamily: Fonts.body, color: Colors.textMuted, lineHeight: 16 },
+
+  rewardsCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 13,
+    backgroundColor: Colors.surface, marginHorizontal: 18, marginTop: 14,
+    borderRadius: Radius.lg, paddingHorizontal: 16, paddingVertical: 14,
+    borderWidth: 1, borderColor: 'rgba(201,154,70,0.3)',
+    ...(Shadows.soft as object),
+  },
+  rewardsFlameBox: {
+    width: 40, height: 40, borderRadius: 14,
+    backgroundColor: 'rgba(193,102,59,0.1)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  rewardsTitle: { fontSize: 14.5, fontFamily: Fonts.bodyBold, color: Colors.text },
+  rewardsSub: { fontSize: 12, fontFamily: Fonts.bodyMedium, color: Colors.textMuted, marginTop: 2 },
+
   statsRow: { flexDirection: 'row', marginHorizontal: 18, gap: 10, marginTop: 14 },
   statCard: {
     flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.lg,
@@ -725,6 +862,18 @@ const styles = StyleSheet.create({
     paddingVertical: 14, backgroundColor: 'rgba(196,67,45,0.04)',
   },
   signOutText: { color: Colors.error, fontSize: 14.5, fontFamily: Fonts.bodyBold },
+
+  deleteAccountBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    marginHorizontal: 18, marginTop: 12,
+    borderRadius: Radius.pill, paddingVertical: 14,
+    backgroundColor: 'rgba(196,67,45,0.10)',
+  },
+  deleteAccountText: { color: Colors.error, fontSize: 14.5, fontFamily: Fonts.bodyBold },
+  deleteAccountHint: {
+    marginHorizontal: 34, marginTop: 10, textAlign: 'center',
+    fontSize: 11.5, fontFamily: Fonts.body, color: Colors.textMuted, lineHeight: 16,
+  },
 
   authWall: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 36, backgroundColor: Colors.background },
   authIconBox: {

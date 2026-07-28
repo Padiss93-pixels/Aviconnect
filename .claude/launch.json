@@ -4,9 +4,15 @@
     {
       "name": "AviConnect Web",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["expo", "start", "--web"],
-      "port": 8090,
+      "runtimeArgs": ["expo", "start", "--web", "--clear"],
+      "port": 8081,
       "autoPort": true
+    },
+    {
+      "name": "AviConnect Static",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/serve-dist.js"],
+      "port": 4173
     },
     {
       "name": "AviConnect Expo",

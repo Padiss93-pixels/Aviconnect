@@ -1,13 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { createContext, useContext, useCallback } from 'react';
+import { supabase } from '@/lib/supabase';
 
 export type ProduitVet = {
-  id: number;
+  id: string;
   nom: string;
   description: string;
   prix: number;
-  unite: string; // ex: "par dose", "par flacon", "par kg"
+  unite: string;
   categorie: 'vaccin' | 'vitamine' | 'medicament' | 'autre';
   photo?: string;
 };
@@ -18,35 +17,12 @@ export type ProfilVet = {
   catalogue: ProduitVet[];
 };
 
-const VET_STORAGE_KEY = '@aviconnect_vet_profiles';
-
-async function storage(op: 'get' | 'set', key: string, value?: string): Promise<string | null> {
-  try {
-    if (Platform.OS === 'web') {
-      if (op === 'get') return localStorage.getItem(key);
-      if (op === 'set') { localStorage.setItem(key, value!); return null; }
-    } else {
-      if (op === 'get') return await AsyncStorage.getItem(key);
-      if (op === 'set') { await AsyncStorage.setItem(key, value!); return null; }
-    }
-  } catch {}
-  return null;
-}
-
-async function loadAllProfiles(): Promise<Record<string, ProfilVet>> {
-  const raw = await storage('get', VET_STORAGE_KEY);
-  return raw ? JSON.parse(raw) : {};
-}
-
-async function saveAllProfiles(profiles: Record<string, ProfilVet>): Promise<void> {
-  await storage('set', VET_STORAGE_KEY, JSON.stringify(profiles));
-}
 
 type VetContextType = {
   getProfilVet: (userId: string) => Promise<ProfilVet>;
   addProduit: (userId: string, produit: Omit<ProduitVet, 'id'>) => Promise<void>;
   updateProduit: (userId: string, produit: ProduitVet) => Promise<void>;
-  deleteProduit: (userId: string, produitId: number) => Promise<void>;
+  deleteProduit: (userId: string, produitId: string) => Promise<void>;
   updatePhoto: (userId: string, photoUri: string) => Promise<void>;
   getCatalogue: (userId: string) => Promise<ProduitVet[]>;
 };
@@ -60,48 +36,78 @@ const VetContext = createContext<VetContextType>({
   getCatalogue: async () => [],
 });
 
+function rowToProduit(row: any): ProduitVet {
+  return {
+    id: row.id,
+    nom: row.nom,
+    description: row.description ?? '',
+    prix: Number(row.prix ?? 0),
+    unite: row.unite ?? '',
+    categorie: row.type as ProduitVet['categorie'],
+    photo: row.photo ?? undefined,
+  };
+}
+
 export function VetProvider({ children }: { children: React.ReactNode }) {
   const getProfilVet = useCallback(async (userId: string): Promise<ProfilVet> => {
-    const profiles = await loadAllProfiles();
-    return profiles[userId] ?? { userId, catalogue: [] };
+    const [{ data: profile }, { data: catalogue }] = await Promise.all([
+      supabase.from('profiles').select('photo').eq('id', userId).single(),
+      supabase.from('vet_catalogue').select('*').eq('vet_id', userId).order('created_at', { ascending: true }),
+    ]);
+    return {
+      userId,
+      photo: profile?.photo ?? undefined,
+      catalogue: (catalogue ?? []).map(rowToProduit),
+    };
   }, []);
 
   const addProduit = useCallback(async (userId: string, produit: Omit<ProduitVet, 'id'>) => {
-    const profiles = await loadAllProfiles();
-    const profil = profiles[userId] ?? { userId, catalogue: [] };
-    const newProduit: ProduitVet = { ...produit, id: Date.now() };
-    profiles[userId] = { ...profil, catalogue: [...profil.catalogue, newProduit] };
-    await saveAllProfiles(profiles);
+    await supabase.from('vet_catalogue').insert({
+      vet_id: userId,
+      nom: produit.nom,
+      type: produit.categorie,
+      description: produit.description,
+      prix: produit.prix,
+      unite: produit.unite,
+      photo: produit.photo ?? null,
+    });
   }, []);
 
   const updateProduit = useCallback(async (userId: string, produit: ProduitVet) => {
-    const profiles = await loadAllProfiles();
-    const profil = profiles[userId] ?? { userId, catalogue: [] };
-    profiles[userId] = {
-      ...profil,
-      catalogue: profil.catalogue.map((p) => p.id === produit.id ? produit : p),
-    };
-    await saveAllProfiles(profiles);
+    await supabase
+      .from('vet_catalogue')
+      .update({
+        nom: produit.nom,
+        type: produit.categorie,
+        description: produit.description,
+        prix: produit.prix,
+        unite: produit.unite,
+        photo: produit.photo ?? null,
+      })
+      .eq('id', produit.id)
+      .eq('vet_id', userId);
   }, []);
 
-  const deleteProduit = useCallback(async (userId: string, produitId: number) => {
-    const profiles = await loadAllProfiles();
-    const profil = profiles[userId] ?? { userId, catalogue: [] };
-    profiles[userId] = { ...profil, catalogue: profil.catalogue.filter((p) => p.id !== produitId) };
-    await saveAllProfiles(profiles);
+  const deleteProduit = useCallback(async (userId: string, produitId: string) => {
+    await supabase
+      .from('vet_catalogue')
+      .delete()
+      .eq('id', produitId)
+      .eq('vet_id', userId);
   }, []);
 
   const updatePhoto = useCallback(async (userId: string, photoUri: string) => {
-    const profiles = await loadAllProfiles();
-    const profil = profiles[userId] ?? { userId, catalogue: [] };
-    profiles[userId] = { ...profil, photo: photoUri };
-    await saveAllProfiles(profiles);
+    await supabase.from('profiles').update({ photo: photoUri }).eq('id', userId);
   }, []);
 
   const getCatalogue = useCallback(async (userId: string): Promise<ProduitVet[]> => {
-    const profil = await getProfilVet(userId);
-    return profil.catalogue;
-  }, [getProfilVet]);
+    const { data } = await supabase
+      .from('vet_catalogue')
+      .select('*')
+      .eq('vet_id', userId)
+      .order('created_at', { ascending: true });
+    return (data ?? []).map(rowToProduit);
+  }, []);
 
   return (
     <VetContext.Provider value={{ getProfilVet, addProduit, updateProduit, deleteProduit, updatePhoto, getCatalogue }}>

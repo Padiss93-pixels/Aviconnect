@@ -1,15 +1,17 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, Pressable,
-  StyleSheet, TextInput, FlatList, ScrollView, Platform, Linking, TouchableOpacity,
+  StyleSheet, TextInput, FlatList, ScrollView, Platform, Linking, TouchableOpacity, Image,
 } from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { Search, SearchX, SlidersHorizontal, X } from 'lucide-react-native';
 import { Colors, Fonts, Radius, Shadows } from '@/constants/theme';
 import { REGIONS, type ProductType, type Lot } from '@/constants/mockData';
 import { useAnnonces } from '@/hooks/AnnoncesContext';
+import { useBoost } from '@/hooks/BoostContext';
 import { usePubs, type MarchePub } from '@/hooks/PubContext';
 import { useDrawer } from '@/hooks/DrawerContext';
+import { useRewards } from '@/hooks/RewardsContext';
 import LotCard from '@/components/LotCard';
 import ScreenHeader from '@/components/ui/ScreenHeader';
 
@@ -48,18 +50,47 @@ function openLien(lien?: string) {
 
 function PubCard({ pub }: { pub: MarchePub }) {
   const hasLien = !!pub.lien;
+  const [ogImage, setOgImage] = useState<string | null>(pub.image ?? null);
+  const [imgError, setImgError] = useState(false);
+
+  // Auto-récupère l'image OG du site via microlink si pas d'image manuelle
+  useEffect(() => {
+    if (pub.image || !pub.lien || ogImage) return;
+    fetch(`https://api.microlink.io/?url=${encodeURIComponent(pub.lien)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const url = data?.data?.image?.url;
+        if (url) setOgImage(url);
+      })
+      .catch(() => {});
+  }, [pub.lien, pub.image]);
+
+  const showImage = !imgError && !!ogImage;
+
   return (
     <Pressable
       onPress={hasLien ? () => openLien(pub.lien) : undefined}
-      style={({ pressed }) => [pubStyles.card, { backgroundColor: pub.bg, opacity: pressed && hasLien ? 0.85 : 1 }]}
+      style={({ pressed }) => [pubStyles.card, { opacity: pressed && hasLien ? 0.88 : 1 }]}
     >
-      <Text style={pubStyles.emoji}>{pub.emoji}</Text>
-      <View style={{ flex: 1 }}>
-        <Text style={pubStyles.titre}>{pub.titre}</Text>
-        <Text style={pubStyles.desc}>{pub.description}</Text>
-        {hasLien && <Text style={pubStyles.lienLabel}>Voir plus →</Text>}
+      {/* Image OG en haut */}
+      {showImage && (
+        <Image
+          source={{ uri: ogImage! }}
+          style={pubStyles.ogImage}
+          resizeMode="cover"
+          onError={() => setImgError(true)}
+        />
+      )}
+      {/* Corps texte */}
+      <View style={[pubStyles.body, { backgroundColor: pub.bg }]}>
+        <Text style={pubStyles.emoji}>{pub.emoji}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={pubStyles.titre}>{pub.titre}</Text>
+          {pub.description ? <Text style={pubStyles.desc}>{pub.description}</Text> : null}
+          {hasLien && <Text style={pubStyles.lienLabel}>Voir plus →</Text>}
+        </View>
+        <View style={pubStyles.badge}><Text style={pubStyles.badgeText}>Pub</Text></View>
       </View>
-      <View style={pubStyles.badge}><Text style={pubStyles.badgeText}>Pub</Text></View>
     </Pressable>
   );
 }
@@ -67,9 +98,13 @@ function PubCard({ pub }: { pub: MarchePub }) {
 const pubStyles = StyleSheet.create({
   card: {
     marginHorizontal: 4, marginVertical: 6, borderRadius: Radius.md,
-    padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12,
+    overflow: 'hidden',
   },
-  emoji: { fontSize: 32 },
+  ogImage: { width: '100%', height: 160 },
+  body: {
+    padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12,
+  },
+  emoji: { fontSize: 28 },
   titre: { fontSize: 15, fontFamily: Fonts.bodyBold, color: '#fff', marginBottom: 3 },
   desc: { fontSize: 12, fontFamily: Fonts.body, color: 'rgba(255,255,255,0.85)', lineHeight: 17 },
   lienLabel: { fontSize: 11, color: 'rgba(255,255,255,0.9)', marginTop: 4, textDecorationLine: 'underline', fontFamily: Fonts.bodySemiBold },
@@ -84,12 +119,13 @@ const pubStyles = StyleSheet.create({
 function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={{
-      paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.pill, margin: 3,
+      paddingHorizontal: 16, paddingVertical: 11, borderRadius: Radius.pill, margin: 3,
+      minHeight: 44, justifyContent: 'center',
       borderWidth: 1.5,
       borderColor: active ? Colors.primary : Colors.border,
       backgroundColor: active ? Colors.primary : Colors.surface,
     }}>
-      <Text style={{ fontSize: 13, fontFamily: active ? Fonts.bodyBold : Fonts.bodyMedium, color: active ? '#fff' : Colors.textSecondary }}>
+      <Text style={{ fontSize: 14, fontFamily: active ? Fonts.bodyBold : Fonts.bodyMedium, color: active ? '#fff' : Colors.textSecondary }}>
         {label}
       </Text>
     </Pressable>
@@ -99,8 +135,15 @@ function Chip({ label, active, onPress }: { label: string; active: boolean; onPr
 export default function MarchesScreen() {
   const params = useLocalSearchParams<{ produit?: string; q?: string }>();
   const { annonces: allLots, unreadCount } = useAnnonces();
+  const { boostedAnnonceIds, refreshBoosts } = useBoost();
+
+  useFocusEffect(useCallback(() => { refreshBoosts(); }, [refreshBoosts]));
   const { marchePubs } = usePubs();
   const { toggle: toggleDrawer } = useDrawer();
+  const { completeQuest, ready: rewardsReady } = useRewards();
+
+  // Défi du jour : explorer le marché (attend le chargement des récompenses)
+  useEffect(() => { if (rewardsReady) completeQuest('visite_marche'); }, [rewardsReady]);
 
   const [searchInput, setSearchInput] = useState(params.q || '');
   const [search, setSearch] = useState(params.q || '');
@@ -150,6 +193,12 @@ export default function MarchesScreen() {
     if (tri === 'prix_asc') results = [...results].sort((a, b) => a.prix - b.prix);
     else if (tri === 'prix_desc') results = [...results].sort((a, b) => b.prix - a.prix);
     else if (tri === 'qte_desc') results = [...results].sort((a, b) => b.qte - a.qte);
+    // Boosted always first
+    results = [...results].sort((a, b) => {
+      const aB = boostedAnnonceIds.has(a.id) ? 0 : 1;
+      const bB = boostedAnnonceIds.has(b.id) ? 0 : 1;
+      return aB - bB;
+    });
     return results;
   }, [allLots, filter, region, dispo, prixMin, prixMax, search, tri]);
 
@@ -160,7 +209,6 @@ export default function MarchesScreen() {
     let pubIdx = 0;
     let pairCount = 0;
     for (let i = 0; i < filtered.length; i += 2) {
-      // Insérer une pub toutes les 4 paires (= 8 annonces), sauf en tout premier
       if (pairCount > 0 && pairCount % 4 === 0 && activePubs.length > 0) {
         result.push({ type: 'pub', id: `pub_${pubIdx}`, pub: activePubs[pubIdx % activePubs.length] });
         pubIdx++;
@@ -176,74 +224,84 @@ export default function MarchesScreen() {
     setPrixMin(''); setPrixMax(''); setTri('recent');
   };
 
-  return (
-    <View style={styles.container}>
-      <ScreenHeader title="Marché" onMenuPress={toggleDrawer} unreadCount={unreadCount} />
-
-      {/* Barre recherche */}
-      <View style={styles.searchRow}>
-        <View style={styles.searchBar}>
-          <Search size={17} color={Colors.textMuted} strokeWidth={1.8} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Un produit, un éleveur, une région..."
-            placeholderTextColor={Colors.textPlaceholder}
-            value={searchInput}
-            onChangeText={handleSearch}
-            returnKeyType="search"
-            autoCorrect={false}
-          />
-          {searchInput.length > 0 && (
-            <Pressable onPress={() => { setSearchInput(''); setSearch(''); }} hitSlop={8}>
-              <X size={16} color={Colors.textMuted} strokeWidth={1.8} />
-            </Pressable>
-          )}
-        </View>
-        <Pressable
-          onPress={() => setShowFilters((v) => !v)}
-          style={[styles.filterBtn, (showFilters || activeFilterCount > 0) && styles.filterBtnActive]}
-        >
-          <SlidersHorizontal size={18} color={showFilters || activeFilterCount > 0 ? Colors.primaryDark : Colors.textSecondary} strokeWidth={1.7} />
-          {activeFilterCount > 0 && !showFilters && (
-            <View style={styles.filterBadge}>
-              <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-            </View>
-          )}
-        </Pressable>
-      </View>
-
-      {/* Pills produit — cachées quand filtres ouverts */}
-      <View style={{ display: showFilters ? 'none' : 'flex' }}>
-        <View style={styles.pillsRow}>
-          {PRODUITS.map((f) => (
-            <Chip key={String(f.key)} label={f.label} active={filter === f.key} onPress={() => setFilter(f.key)} />
-          ))}
-        </View>
-        {activeFilterCount > 0 && (
-          <View style={styles.tagsRow}>
-            {region !== 'Toutes' && (
-              <Pressable style={styles.tag} onPress={() => setRegion('Toutes')}>
-                <Text style={styles.tagText}>{region} ✕</Text>
-              </Pressable>
-            )}
-            {dispo !== 'Toutes' && (
-              <Pressable style={styles.tag} onPress={() => setDispo('Toutes')}>
-                <Text style={styles.tagText}>{dispo} ✕</Text>
-              </Pressable>
-            )}
-            {(prixMin || prixMax) && (
-              <Pressable style={styles.tag} onPress={() => { setPrixMin(''); setPrixMax(''); }}>
-                <Text style={styles.tagText}>{prixMin || '0'}–{prixMax || '∞'} F ✕</Text>
-              </Pressable>
-            )}
-            {tri !== 'recent' && (
-              <Pressable style={styles.tag} onPress={() => setTri('recent')}>
-                <Text style={styles.tagText}>{TRIS.find(t => t.key === tri)?.label} ✕</Text>
-              </Pressable>
-            )}
-          </View>
+  // Barre de recherche fixe en haut
+  const searchBar = (
+    <View style={styles.searchRow}>
+      <View style={styles.searchBar}>
+        <Search size={17} color={Colors.textMuted} strokeWidth={1.8} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Un produit, un éleveur, une région..."
+          placeholderTextColor={Colors.textPlaceholder}
+          value={searchInput}
+          onChangeText={handleSearch}
+          returnKeyType="search"
+          autoCorrect={false}
+        />
+        {searchInput.length > 0 && (
+          <Pressable onPress={() => { setSearchInput(''); setSearch(''); }} hitSlop={8}>
+            <X size={16} color={Colors.textMuted} strokeWidth={1.8} />
+          </Pressable>
         )}
       </View>
+      <Pressable
+        onPress={() => setShowFilters((v) => !v)}
+        style={[styles.filterBtn, (showFilters || activeFilterCount > 0) && styles.filterBtnActive]}
+      >
+        <SlidersHorizontal size={18} color={showFilters || activeFilterCount > 0 ? Colors.primaryDark : Colors.textSecondary} strokeWidth={1.7} />
+        {activeFilterCount > 0 && !showFilters && (
+          <View style={styles.filterBadge}>
+            <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+          </View>
+        )}
+      </Pressable>
+    </View>
+  );
+
+  // Header qui scroll avec la liste
+  const listHeader = (
+    <>
+      <ScreenHeader title="Marché" onMenuPress={toggleDrawer} unreadCount={unreadCount} showFavorites />
+      {!showFilters && (
+        <View style={styles.pillsWrap}>
+          <View style={styles.pillsRow}>
+            {PRODUITS.map((f) => (
+              <Chip key={String(f.key)} label={f.label} active={filter === f.key} onPress={() => setFilter(f.key)} />
+            ))}
+          </View>
+          {activeFilterCount > 0 && (
+            <View style={styles.tagsRow}>
+              {region !== 'Toutes' && (
+                <Pressable style={styles.tag} onPress={() => setRegion('Toutes')}>
+                  <Text style={styles.tagText}>{region} ✕</Text>
+                </Pressable>
+              )}
+              {dispo !== 'Toutes' && (
+                <Pressable style={styles.tag} onPress={() => setDispo('Toutes')}>
+                  <Text style={styles.tagText}>{dispo} ✕</Text>
+                </Pressable>
+              )}
+              {(prixMin || prixMax) && (
+                <Pressable style={styles.tag} onPress={() => { setPrixMin(''); setPrixMax(''); }}>
+                  <Text style={styles.tagText}>{prixMin || '0'}–{prixMax || '∞'} F ✕</Text>
+                </Pressable>
+              )}
+              {tri !== 'recent' && (
+                <Pressable style={styles.tag} onPress={() => setTri('recent')}>
+                  <Text style={styles.tagText}>{TRIS.find(t => t.key === tri)?.label} ✕</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
+        </View>
+      )}
+    </>
+  );
+
+  return (
+    <View style={styles.container}>
+      {/* Barre de recherche toujours visible en haut */}
+      <View style={styles.stickySearch}>{searchBar}</View>
 
       {/* Panneau filtres — affiché par display, jamais démonté */}
       <View style={{ display: showFilters ? 'flex' : 'none', flex: 1 }}>
@@ -299,11 +357,12 @@ export default function MarchesScreen() {
         </View>
       </View>
 
-      {/* Liste — affichée par display, jamais démontée */}
+      {/* Liste avec header qui scroll */}
       <View style={{ display: showFilters ? 'none' : 'flex', flex: 1 }}>
         <FlatList
           data={rows}
           keyExtractor={(item) => item.id}
+          ListHeaderComponent={listHeader}
           removeClippedSubviews
           maxToRenderPerBatch={4}
           updateCellsBatchingPeriod={60}
@@ -316,11 +375,11 @@ export default function MarchesScreen() {
             return (
               <View style={styles.pairRow}>
                 <View style={styles.gridItem}>
-                  <LotCard lot={item.left} />
+                  <LotCard lot={item.left} isBoosted={boostedAnnonceIds.has(item.left.id)} />
                 </View>
                 {item.right ? (
                   <View style={styles.gridItem}>
-                    <LotCard lot={item.right} />
+                    <LotCard lot={item.right} isBoosted={boostedAnnonceIds.has(item.right.id)} />
                   </View>
                 ) : (
                   <View style={styles.gridItem} />
@@ -352,6 +411,16 @@ export default function MarchesScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  stickySearch: {
+    zIndex: 10,
+    backgroundColor: Colors.surface,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6 },
+      android: { elevation: 4 },
+      web: { boxShadow: '0 2px 8px rgba(0,0,0,0.06)' } as any,
+    }),
+  },
+  pillsWrap: { backgroundColor: Colors.surface },
   searchRow: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8, gap: 9,
@@ -361,11 +430,11 @@ const styles = StyleSheet.create({
   searchBar: {
     flex: 1, flexDirection: 'row', alignItems: 'center', gap: 9,
     backgroundColor: Colors.surfaceSecondary, borderRadius: Radius.pill,
-    paddingHorizontal: 16, paddingVertical: 12,
+    paddingHorizontal: 16, paddingVertical: 13, minHeight: 48,
   },
-  searchInput: { flex: 1, fontSize: 14.5, color: Colors.text, fontFamily: Fonts.bodyMedium },
+  searchInput: { flex: 1, fontSize: 15, color: Colors.text, fontFamily: Fonts.bodyMedium },
   filterBtn: {
-    width: 45, height: 45, borderRadius: Radius.pill,
+    width: 48, height: 48, borderRadius: Radius.pill,
     backgroundColor: Colors.surfaceSecondary,
     justifyContent: 'center', alignItems: 'center',
   },

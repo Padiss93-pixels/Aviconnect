@@ -7,29 +7,18 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
 import { useAuthContext } from '@/hooks/AuthContext';
-import { useVetContext } from '@/hooks/VetContext';
 import { User } from '@/hooks/useAuth';
 
 export default function VeterinairesCertifies() {
   const { getAllUsers } = useAuthContext();
-  const { getProfilVet } = useVetContext();
   const [vets, setVets] = useState<User[]>([]);
-  const [photos, setPhotos] = useState<Record<string, string | undefined>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    (async () => {
-      const users = await getAllUsers();
-      const certified = users.filter((u) => u.role === 'veterinaire' && u.vetStatus === 'certified');
-      setVets(certified);
-      const photoMap: Record<string, string | undefined> = {};
-      for (const v of certified) {
-        const profil = await getProfilVet(v.id);
-        photoMap[v.id] = profil.photo;
-      }
-      setPhotos(photoMap);
+    getAllUsers().then((users) => {
+      setVets(users.filter((u) => u.role === 'veterinaire' && u.vetStatus === 'certified'));
       setLoading(false);
-    })();
+    });
   }, []);
 
   return (
@@ -70,8 +59,8 @@ export default function VeterinairesCertifies() {
               activeOpacity={0.82}
             >
               <View style={styles.vetLeft}>
-                {photos[vet.id] ? (
-                  <Image source={{ uri: photos[vet.id] }} style={styles.avatar} />
+                {vet.photo ? (
+                  <Image source={{ uri: vet.photo }} style={styles.avatar} />
                 ) : (
                   <View style={styles.avatarPlaceholder}>
                     <Text style={styles.avatarInitials}>

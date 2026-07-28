@@ -257,6 +257,8 @@ export default function AdminPanel() {
           { label: '🏭 Couvoirs', path: '/admin/couvoirs', bg: '#f0fdf4', color: Colors.primaryDark },
           { label: '💉 Vétérinaires', path: '/admin/veterinaires', bg: '#ccfbf1', color: '#0f766e' },
           { label: '🚨 Modération', path: '/admin/moderation', bg: '#fff1f2', color: '#be123c' },
+          { label: '⚡ Boosts', path: '/admin/boosts', bg: '#FFFBF0', color: '#92600A' },
+          { label: '📊 Annonceurs', path: '/admin/annonceurs', bg: '#F5F3FF', color: '#5B21B6' },
         ].map((l) => (
           <TouchableOpacity key={l.path} style={[styles.quickChip, { backgroundColor: l.bg }]} onPress={() => router.push(l.path as any)}>
             <Text style={[styles.quickChipText, { color: l.color }]}>{l.label}</Text>

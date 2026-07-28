@@ -1,14 +1,18 @@
 ﻿import { useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Platform, Image, Linking, ActivityIndicator, Alert,
+  Platform, Image, Linking, ActivityIndicator, Alert, Dimensions,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
+import { Fonts, Radius, Shadows } from '@/constants/theme';
 import { useAuthContext } from '@/hooks/AuthContext';
 import { useVetContext, ProduitVet } from '@/hooks/VetContext';
 import { User } from '@/hooks/useAuth';
+
+const SCREEN_W = Dimensions.get('window').width;
+const CARD_W = (SCREEN_W - 16 * 2 - 10) / 2;
 
 const CATEGORIE_ICONS: Record<string, string> = {
   vaccin: '💉',
@@ -59,7 +63,10 @@ export default function VeterinaireProfile() {
     router.push(`/chat/${vet.id}` as any);
   };
 
-  const categories = [...new Set(catalogue.map((p) => p.categorie))];
+  const handleWhatsApp = () => {
+    const url = `https://wa.me/221${vet.phone}`;
+    Linking.openURL(url).catch(() => Alert.alert('WhatsApp non disponible', 'Assurez-vous que WhatsApp est installé.'));
+  };
 
   return (
     <View style={styles.container}>
@@ -90,6 +97,7 @@ export default function VeterinaireProfile() {
             </View>
           </View>
 
+          <Text style={styles.vetRoleLabel}>Vétérinaire</Text>
           <Text style={styles.vetNom}>Dr {vet.prenom} {vet.nom}</Text>
           {vet.ferme && <Text style={styles.vetClinique}>🏥 {vet.ferme}</Text>}
           <Text style={styles.vetRegion}>📍 {vet.region}</Text>
@@ -99,6 +107,10 @@ export default function VeterinaireProfile() {
               <Ionicons name="call" size={18} color="#fff" />
               <Text style={styles.btnText}>Appeler</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={styles.btnWhatsApp} onPress={handleWhatsApp}>
+              <Ionicons name="logo-whatsapp" size={18} color="#fff" />
+              <Text style={styles.btnText}>WhatsApp</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.btnMsg} onPress={handleMessage}>
               <Ionicons name="chatbubble-ellipses" size={18} color="#0f766e" />
               <Text style={styles.btnMsgText}>Message</Text>
@@ -107,39 +119,45 @@ export default function VeterinaireProfile() {
         </View>
 
         {/* Catalogue */}
-        <Text style={styles.sectionTitle}>Mon catalogue</Text>
+        <Text style={styles.sectionTitle}>Catalogue</Text>
 
         {catalogue.length === 0 ? (
           <View style={styles.emptyCatalogue}>
             <Text style={styles.emptyCatalogueText}>Ce vétérinaire n'a pas encore publié son catalogue.</Text>
           </View>
         ) : (
-          <>
-            {categories.map((cat) => (
-              <View key={cat} style={styles.catSection}>
-                <Text style={styles.catTitle}>
-                  {CATEGORIE_ICONS[cat]} {cat.charAt(0).toUpperCase() + cat.slice(1)}s
-                </Text>
-                {catalogue.filter((p) => p.categorie === cat).map((produit) => (
-                  <View key={produit.id} style={styles.produitCard}>
-                    {produit.photo && (
-                      <Image source={{ uri: produit.photo }} style={styles.produitPhoto} />
-                    )}
-                    <View style={[styles.produitTop, produit.photo && { paddingTop: 10 }]}>
-                      <Text style={styles.produitNom}>{produit.nom}</Text>
-                      <Text style={styles.produitPrix}>
-                        {produit.prix.toLocaleString()} F CFA
-                        <Text style={styles.produitUnite}> / {produit.unite}</Text>
-                      </Text>
-                    </View>
-                    {produit.description ? (
-                      <Text style={styles.produitDesc}>{produit.description}</Text>
-                    ) : null}
+          <View style={styles.grid}>
+            {catalogue.map((produit) => (
+              <View key={produit.id} style={styles.prodCard}>
+                {/* Image / emoji */}
+                <View style={styles.prodImgBox}>
+                  {produit.photo && !produit.photo.startsWith('blob:') ? (
+                    <Image source={{ uri: produit.photo }} style={StyleSheet.absoluteFillObject} resizeMode="cover" onError={() => {}} />
+                  ) : (
+                    <Text style={styles.prodEmoji}>{CATEGORIE_ICONS[produit.categorie] ?? '📦'}</Text>
+                  )}
+                  <View style={styles.prodCatBadge}>
+                    <Text style={styles.prodCatBadgeText}>{produit.categorie}</Text>
                   </View>
-                ))}
+                </View>
+
+                {/* Body */}
+                <View style={styles.prodBody}>
+                  <Text style={styles.prodNom} numberOfLines={2}>{produit.nom}</Text>
+                  {produit.description ? (
+                    <Text style={styles.prodDesc} numberOfLines={2}>{produit.description}</Text>
+                  ) : null}
+                  <Text style={styles.prodPrix}>
+                    {produit.prix.toLocaleString()} <Text style={styles.prodPrixSub}>F / {produit.unite}</Text>
+                  </Text>
+                  <TouchableOpacity style={styles.prodBtn} onPress={handleMessage} activeOpacity={0.88}>
+                    <Ionicons name="chatbubble-ellipses" size={13} color="#fff" />
+                    <Text style={styles.prodBtnText}>Contacter</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             ))}
-          </>
+          </View>
         )}
 
         <View style={{ height: 60 }} />
@@ -178,7 +196,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10, paddingVertical: 4,
   },
   certText: { fontSize: 12, color: '#fff', fontWeight: '700' },
-  vetNom: { fontSize: 20, fontWeight: '800', color: Colors.text, marginTop: 8, marginBottom: 4 },
+  vetRoleLabel: { fontSize: 26, fontWeight: '800', color: '#0f766e', marginTop: 10, marginBottom: 2, letterSpacing: -0.3 },
+  vetNom: { fontSize: 15, fontWeight: '500', color: Colors.textMuted, marginBottom: 6 },
   vetClinique: { fontSize: 13, color: Colors.textSecondary, marginBottom: 2 },
   vetRegion: { fontSize: 13, color: Colors.textMuted, marginBottom: 16 },
   actionRow: { flexDirection: 'row', gap: 12, width: '100%' },
@@ -188,6 +207,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center', gap: 6,
   },
   btnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  btnWhatsApp: {
+    flex: 1, backgroundColor: '#25D366', borderRadius: 12,
+    paddingVertical: 12, flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'center', gap: 6,
+  },
   btnMsg: {
     flex: 1, backgroundColor: '#f0fdfa', borderRadius: 12,
     paddingVertical: 12, flexDirection: 'row', alignItems: 'center',
@@ -203,18 +227,36 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0fdfa', borderRadius: 12, padding: 20, alignItems: 'center',
   },
   emptyCatalogueText: { fontSize: 13, color: '#0f766e', textAlign: 'center' },
-  catSection: { marginBottom: 20 },
-  catTitle: { fontSize: 13, fontWeight: '700', color: Colors.textMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
-  produitCard: {
-    backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden', marginBottom: 8,
-    borderLeftWidth: 3, borderLeftColor: '#0f766e',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
+
+  /* Grille */
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  prodCard: {
+    width: CARD_W,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+    ...(Shadows.card as object),
   },
-  produitPhoto: { width: '100%', height: 130, resizeMode: 'cover' },
-  produitTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4, padding: 14 },
-  produitNom: { fontSize: 14, fontWeight: '700', color: Colors.text, flex: 1, marginRight: 8 },
-  produitPrix: { fontSize: 14, fontWeight: '800', color: '#0f766e' },
-  produitUnite: { fontSize: 11, fontWeight: '500', color: Colors.textMuted },
-  produitDesc: { fontSize: 12, color: Colors.textSecondary, lineHeight: 18, paddingHorizontal: 14, paddingBottom: 12 },
+  prodImgBox: {
+    height: 120, backgroundColor: '#f0fdfa',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  prodEmoji: { fontSize: 42 },
+  prodCatBadge: {
+    position: 'absolute', top: 8, left: 8,
+    backgroundColor: 'rgba(15,118,110,0.15)',
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20,
+  },
+  prodCatBadgeText: { fontSize: 10, fontWeight: '700', color: '#0f766e', textTransform: 'capitalize' },
+  prodBody: { padding: 10 },
+  prodNom: { fontSize: 13, fontWeight: '700', color: Colors.text, marginBottom: 3, lineHeight: 18 },
+  prodDesc: { fontSize: 11, color: Colors.textMuted, lineHeight: 15, marginBottom: 6 },
+  prodPrix: { fontSize: 16, fontWeight: '800', color: '#0f766e', marginBottom: 8 },
+  prodPrixSub: { fontSize: 10, fontWeight: '500', color: Colors.textMuted },
+  prodBtn: {
+    backgroundColor: '#0f766e', borderRadius: Radius.pill,
+    paddingVertical: 9, flexDirection: 'row',
+    alignItems: 'center', justifyContent: 'center', gap: 5,
+  },
+  prodBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
 });

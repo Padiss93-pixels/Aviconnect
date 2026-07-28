@@ -79,7 +79,7 @@ export default function MesDroits() {
         <View style={styles.introBanner}>
           <Ionicons name="person-circle" size={30} color={Colors.primary} />
           <Text style={styles.introText}>
-            En tant qu\'utilisateur d\'AviConnect au Sénégal, vous bénéficiez de droits garantis par la Loi n°2008-12 du 25 janvier 2008 sur la protection des données personnelles.
+            En tant qu'utilisateur d'AviConnect au Sénégal, vous bénéficiez de droits garantis par la Loi n°2008-12 du 25 janvier 2008 sur la protection des données personnelles.
           </Text>
         </View>
 
@@ -98,7 +98,7 @@ export default function MesDroits() {
 
         <View style={styles.contactBox}>
           <Text style={styles.contactTitle}>Exercer vos droits</Text>
-          <Text style={styles.contactSub}>Toute demande doit être envoyée par email avec une preuve d\'identité. Délai de réponse : 72 heures ouvrées.</Text>
+          <Text style={styles.contactSub}>Toute demande doit être envoyée par email avec une preuve d'identité. Délai de réponse : 72 heures ouvrées.</Text>
           <TouchableOpacity style={styles.contactBtn} onPress={() => Linking.openURL('mailto:contact@aviconnect.sn?subject=[DROITS] Demande RGPD')}>
             <Ionicons name="mail" size={18} color="#fff" />
             <Text style={styles.contactBtnText}>contact@aviconnect.sn</Text>

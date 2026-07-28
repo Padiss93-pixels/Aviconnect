@@ -2,16 +2,10 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { Platform } from 'react-native';
 import { LOTS, type Lot } from '@/constants/mockData';
 import { useAuthContext } from './AuthContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useModeration } from './ModerationContext';
+import { supabase } from '@/lib/supabase';
 
-const LOTS_KEY = '@aviconnect_user_lots';
-
-// Clé de notifs propre à chaque utilisateur
-function notifKey(userId: string) {
-  return `@aviconnect_notifs_${userId}`;
-}
-
-const ADMIN_NOTIF_KEY = '@aviconnect_notifs_admin';
+// ── Notifs Supabase ──────────────────────────────────────────────────────────
 
 export type NotifType =
   | 'nouvelle_commande'
@@ -19,7 +13,9 @@ export type NotifType =
   | 'commande_refusee'
   | 'paiement_recu'
   | 'couvoir_inscription'
-  | 'vet_inscription';
+  | 'vet_inscription'
+  | 'boost_demande'
+  | 'abonnement_demande';
 
 export type Notification = {
   id: number;
@@ -35,6 +31,8 @@ const NOTIF_ICONS: Record<NotifType, string> = {
   nouvelle_commande: '🛒',
   commande_acceptee: '✅',
   commande_refusee: '❌',
+  boost_demande: '⚡',
+  abonnement_demande: '👑',
   paiement_recu: '💰',
   couvoir_inscription: '🏭',
   vet_inscription: '💉',
@@ -51,133 +49,190 @@ async function sendPush(title: string, body: string) {
   } catch {}
 }
 
-async function readStorage(): Promise<Lot[]> {
-  try {
-    const raw = Platform.OS === 'web'
-      ? localStorage.getItem(LOTS_KEY)
-      : await AsyncStorage.getItem(LOTS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-
-async function writeStorage(lots: Lot[]): Promise<void> {
-  try {
-    const json = JSON.stringify(lots);
-    if (Platform.OS === 'web') localStorage.setItem(LOTS_KEY, json);
-    else await AsyncStorage.setItem(LOTS_KEY, json);
-  } catch {}
-}
-
-async function readNotifsForUser(userId: string, isAdmin = false): Promise<Notification[]> {
-  try {
-    const key = notifKey(userId);
-    const raw = Platform.OS === 'web'
-      ? localStorage.getItem(key)
-      : await AsyncStorage.getItem(key);
-    const userNotifs: Notification[] = raw ? JSON.parse(raw) : [];
-
-    if (!isAdmin) return userNotifs;
-
-    // Pour l'admin : fusionner avec la clé fixe admin
-    const adminRaw = Platform.OS === 'web'
-      ? localStorage.getItem(ADMIN_NOTIF_KEY)
-      : await AsyncStorage.getItem(ADMIN_NOTIF_KEY);
-    const adminNotifs: Notification[] = adminRaw ? JSON.parse(adminRaw) : [];
-
-    // Dédupliquer par id, fusionner et trier par date desc
-    const allById = new Map<number, Notification>();
-    for (const n of [...userNotifs, ...adminNotifs]) allById.set(n.id, n);
-    const merged = Array.from(allById.values()).sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
-    // Resynchroniser dans la clé utilisateur pour les futures lectures
-    const json = JSON.stringify(merged);
-    if (Platform.OS === 'web') localStorage.setItem(key, json);
-    else await AsyncStorage.setItem(key, json);
-    // Vider la clé fixe admin (déjà migré)
-    if (Platform.OS === 'web') localStorage.removeItem(ADMIN_NOTIF_KEY);
-    else await AsyncStorage.removeItem(ADMIN_NOTIF_KEY);
-    return merged;
-  } catch { return []; }
-}
-
-async function writeNotifsForUser(userId: string, notifs: Notification[]): Promise<void> {
-  try {
-    const key = notifKey(userId);
-    const json = JSON.stringify(notifs);
-    if (Platform.OS === 'web') localStorage.setItem(key, json);
-    else await AsyncStorage.setItem(key, json);
-  } catch {}
-}
+// ── Annonces Supabase ────────────────────────────────────────────────────────
 
 type AnnoncesContextType = {
   annonces: Lot[];
   userLots: Lot[];
   notifications: Notification[];
   unreadCount: number;
-  addAnnonce: (lot: Lot) => Promise<void>;
+  addAnnonce: (lot: Omit<Lot, 'id'>) => Promise<void>;
   deleteAnnonce: (id: number) => Promise<void>;
-  deleteAnnoncesByAuthor: (author: string) => Promise<void>;
+  deleteAnnoncesByAuthor: (authorId: string) => Promise<void>;
   updateAnnonce: (lot: Lot) => Promise<void>;
   reduceStock: (lotId: number, qte: number, acheteur: string, orderId: number) => Promise<void>;
+  adjustStock: (lotId: number, delta: number) => Promise<void>;
   sendNotification: (type: NotifType, title: string, body: string, orderId?: number, targetUserId?: string) => Promise<void>;
   markNotifsRead: () => Promise<void>;
+  refreshAnnonces: () => Promise<void>;
 };
 
 const AnnoncesContext = createContext<AnnoncesContextType>({
   annonces: LOTS, userLots: [], notifications: [], unreadCount: 0,
   addAnnonce: async () => {}, deleteAnnonce: async () => {},
   deleteAnnoncesByAuthor: async () => {},
-  updateAnnonce: async () => {}, reduceStock: async () => {},
+  updateAnnonce: async () => {}, reduceStock: async () => {}, adjustStock: async () => {},
   sendNotification: async () => {}, markNotifsRead: async () => {},
+  refreshAnnonces: async () => {},
 });
+
+function rowToLot(row: any): Lot {
+  return {
+    id: row.id,
+    eleveur: row.eleveur,
+    eleveurId: row.eleveur_id,
+    eleveurPhone: row.eleveur_phone ?? undefined,
+    region: row.region,
+    produit: row.produit,
+    titre: row.titre,
+    qte: row.qte,
+    prix: row.prix,
+    dispo: row.dispo,
+    detail: row.detail,
+    photos: row.photos ?? [],
+    unite: row.unite ?? undefined,
+    createdAt: row.created_at,
+  };
+}
 
 export function AnnoncesProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuthContext();
-  const [userLots, setUserLots] = useState<Lot[]>([]);
+  const { isBlocked } = useModeration();
+  const [dbLots, setDbLots] = useState<Lot[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  // Charger les annonces au montage
-  useEffect(() => {
-    readStorage().then(setUserLots);
+  const fetchAnnonces = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('annonces')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) console.error('[AviConnect] fetch annonces error:', JSON.stringify(error));
+    else console.log('[AviConnect] annonces chargées:', data?.length ?? 0);
+    if (!error && data) setDbLots(data.map(rowToLot));
   }, []);
 
-  // Recharger les notifs à chaque changement d'utilisateur connecté
+  // Chargement initial + abonnement temps réel stock + polling 30s
   useEffect(() => {
-    if (user?.id) {
-      readNotifsForUser(user.id, user.role === 'admin').then(setNotifications);
-    } else {
-      setNotifications([]);
+    fetchAnnonces();
+    const interval = setInterval(fetchAnnonces, 30_000);
+    const sub = supabase
+      .channel('annonces-changes')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'annonces' }, (payload) => {
+        setDbLots((prev) => prev.map((l) => l.id === payload.new.id ? rowToLot(payload.new) : l));
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'annonces' }, (payload) => {
+        setDbLots((prev) => {
+          if (prev.some((l) => l.id === payload.new.id)) return prev;
+          return [rowToLot(payload.new), ...prev];
+        });
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'annonces' }, (payload) => {
+        setDbLots((prev) => prev.filter((l) => l.id !== payload.old.id));
+      })
+      .subscribe();
+    return () => { clearInterval(interval); supabase.removeChannel(sub); };
+  }, [fetchAnnonces]);
+
+  const fetchNotifications = useCallback(async () => {
+    if (!user?.id) { setNotifications([]); return; }
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (!error && data) {
+      setNotifications(data.map((r) => ({
+        id: r.id,
+        type: r.type as NotifType,
+        title: r.title,
+        body: r.body,
+        date: r.created_at,
+        read: r.read,
+        orderId: r.order_id ?? undefined,
+      })));
     }
   }, [user?.id]);
 
-  const addAnnonce = useCallback(async (lot: Lot) => {
-    const updated = [lot, ...userLots];
-    setUserLots(updated);
-    await writeStorage(updated);
-  }, [userLots]);
+  // Chargement initial + abonnement temps réel notifications + polling 15s
+  useEffect(() => {
+    fetchNotifications();
+    if (!user?.id) return;
+    const interval = setInterval(fetchNotifications, 15_000);
+    const sub = supabase
+      .channel(`notifs-${user.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${user.id}`,
+      }, (payload) => {
+        const r = payload.new;
+        const notif: Notification = {
+          id: r.id,
+          type: r.type as NotifType,
+          title: r.title,
+          body: r.body,
+          date: r.created_at,
+          read: r.read,
+          orderId: r.order_id ?? undefined,
+        };
+        setNotifications((prev) => {
+          if (prev.some((n) => n.id === notif.id)) return prev;
+          return [notif, ...prev];
+        });
+        sendPush(r.title, r.body);
+      })
+      .subscribe();
+    return () => { clearInterval(interval); supabase.removeChannel(sub); };
+  }, [fetchNotifications, user?.id]);
+
+  const addAnnonce = useCallback(async (lot: Omit<Lot, 'id'>) => {
+    if (!user) return;
+    const { data, error } = await supabase.from('annonces').insert({
+      eleveur_id: user.id,
+      eleveur: lot.eleveur,
+      eleveur_phone: lot.eleveurPhone ?? null,
+      region: lot.region,
+      produit: lot.produit,
+      titre: lot.titre,
+      qte: lot.qte,
+      prix: lot.prix,
+      dispo: lot.dispo,
+      detail: lot.detail,
+      photos: lot.photos ?? [],
+      unite: lot.unite ?? null,
+    }).select().single();
+    if (!error && data) setDbLots((prev) => [rowToLot(data), ...prev]);
+  }, [user]);
 
   const deleteAnnonce = useCallback(async (id: number) => {
-    const updated = userLots.filter((l) => l.id !== id);
-    setUserLots(updated);
-    await writeStorage(updated);
-  }, [userLots]);
+    await supabase.from('annonces').delete().eq('id', id);
+    setDbLots((prev) => prev.filter((l) => l.id !== id));
+  }, []);
 
-  // Supprime toutes les annonces d'un auteur (utilisé à la suppression de compte)
-  const deleteAnnoncesByAuthor = useCallback(async (author: string) => {
-    const updated = userLots.filter((l) => l.eleveur !== author);
-    setUserLots(updated);
-    await writeStorage(updated);
-  }, [userLots]);
+  const deleteAnnoncesByAuthor = useCallback(async (authorId: string) => {
+    await supabase.from('annonces').delete().eq('eleveur_id', authorId);
+    setDbLots((prev) => prev.filter((l) => l.eleveurId !== authorId));
+  }, []);
 
   const updateAnnonce = useCallback(async (lot: Lot) => {
-    const updated = userLots.map((l) => l.id === lot.id ? lot : l);
-    setUserLots(updated);
-    await writeStorage(updated);
-  }, [userLots]);
+    const { data, error } = await supabase.from('annonces').update({
+      titre: lot.titre,
+      qte: lot.qte,
+      prix: lot.prix,
+      dispo: lot.dispo,
+      detail: lot.detail,
+      photos: lot.photos ?? [],
+      unite: lot.unite ?? null,
+      region: lot.region,
+      produit: lot.produit,
+    }).eq('id', lot.id).select().single();
+    if (!error && data) {
+      setDbLots((prev) => prev.map((l) => l.id === lot.id ? rowToLot(data) : l));
+    }
+  }, []);
 
-  // Envoie une notification au destinataire ciblé (targetUserId)
-  // Si targetUserId non fourni → on écrit pour l'utilisateur courant
   const sendNotification = useCallback(async (
     type: NotifType,
     title: string,
@@ -185,56 +240,53 @@ export function AnnoncesProvider({ children }: { children: React.ReactNode }) {
     orderId?: number,
     targetUserId?: string,
   ) => {
-    const recipientId = targetUserId || user?.id;
-    if (!recipientId) return; // pas de destinataire identifiable, on ignore
+    const recipientId = targetUserId;
+    if (!recipientId || recipientId === user?.id) return;
 
-    const notif: Notification = {
-      id: Date.now(),
+    // Notif en base (in-app)
+    const { error } = await supabase.from('notifications').insert({
+      user_id: recipientId,
       type,
       title,
       body,
-      date: new Date().toISOString(),
       read: false,
-      orderId,
-    };
+      order_id: orderId ?? null,
+    });
+    if (error) console.error('[notif] insert error:', JSON.stringify(error));
 
-    // Lire les notifs existantes du destinataire, ajouter la nouvelle
-    const existing = await readNotifsForUser(recipientId);
-    const updated = [notif, ...existing];
-    await writeNotifsForUser(recipientId, updated);
+    // Push Expo (mobile)
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('push_token')
+      .eq('id', recipientId)
+      .single();
 
-    // Si le destinataire est l'utilisateur actuellement connecté, mettre à jour l'état React
-    if (recipientId === user?.id) {
-      setNotifications(updated);
-    }
-
-    // Push uniquement si le destinataire est l'utilisateur courant (on ne peut pas push pour quelqu'un d'autre)
-    if (recipientId === user?.id) {
-      await sendPush(title, body);
+    if (profile?.push_token) {
+      fetch('https://exp.host/--/exponent-push-notification-gateway', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: profile.push_token,
+          title,
+          body,
+          data: { type, orderId: orderId ?? null },
+          sound: 'default',
+          channelId: 'default',
+        }),
+      }).catch(() => {});
     }
   }, [user?.id]);
 
   const reduceStock = useCallback(async (lotId: number, qte: number, acheteur: string, orderId: number) => {
-    // Cherche d'abord dans userLots, sinon dans les mocks
-    const existsInUser = userLots.some((l) => l.id === lotId);
-    const allLots = [...userLots, ...LOTS];
-    const lot = allLots.find((l) => l.id === lotId);
+    const dbLot = dbLots.find((l) => l.id === lotId);
+    const mockLot = LOTS.find((l) => l.id === lotId);
+    const lot = dbLot || mockLot;
 
-    let updated: typeof userLots;
-    if (existsInUser) {
-      updated = userLots.map((l) =>
-        l.id === lotId ? { ...l, qte: Math.max(0, l.qte - qte) } : l
-      );
-    } else if (lot) {
-      // Lot mock : on l'insère dans userLots avec le stock réduit pour persister la modification
-      const mockReduced = { ...lot, qte: Math.max(0, lot.qte - qte) };
-      updated = [mockReduced, ...userLots];
-    } else {
-      updated = userLots;
+    if (dbLot) {
+      await supabase.rpc('reduce_annonce_stock', { lot_id: lotId, qty: qte });
+      const newQte = Math.max(0, dbLot.qte - qte);
+      setDbLots((prev) => prev.map((l) => l.id === lotId ? { ...l, qte: newQte } : l));
     }
-
-    setUserLots(updated);
-    await writeStorage(updated);
 
     if (lot) {
       await sendNotification(
@@ -242,27 +294,44 @@ export function AnnoncesProvider({ children }: { children: React.ReactNode }) {
         `${NOTIF_ICONS.nouvelle_commande} Nouvelle commande !`,
         `${acheteur} a commandé ${qte} unités de "${lot.titre}". Stock restant : ${Math.max(0, lot.qte - qte)}.`,
         orderId,
-        lot.eleveurId, // undefined pour les mocks sans eleveurId → notification ignorée (pas de vendeur connecté)
+        lot.eleveurId,
       );
     }
-  }, [userLots, sendNotification]);
+  }, [dbLots, sendNotification, user?.id]);
+
+  const adjustStock = useCallback(async (lotId: number, delta: number) => {
+    const lot = dbLots.find((l) => l.id === lotId);
+    if (!lot) return;
+    const newQte = Math.max(0, lot.qte + delta);
+    await supabase.from('annonces').update({ qte: newQte }).eq('id', lotId);
+    setDbLots((prev) => prev.map((l) => l.id === lotId ? { ...l, qte: newQte } : l));
+  }, [dbLots]);
 
   const markNotifsRead = useCallback(async () => {
     if (!user?.id) return;
-    const updated = notifications.map((n) => ({ ...n, read: true }));
-    setNotifications(updated);
-    await writeNotifsForUser(user.id, updated);
-  }, [notifications, user?.id]);
+    await supabase.from('notifications')
+      .update({ read: true })
+      .eq('user_id', user.id)
+      .eq('read', false);
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  }, [user?.id]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
-  // userLots peut contenir des overrides de lots mock (stock réduit) — on déduplique par id, userLots a la priorité
-  const userLotIds = new Set(userLots.map((l) => l.id));
-  const annonces = [...userLots, ...LOTS.filter((l) => !userLotIds.has(l.id))];
+
+  // Annonces Supabase en priorité + mocks (sans doublon d'id) — stock > 0 uniquement.
+  // Les annonces des vendeurs bloqués par l'utilisateur sont masquées (App Store 1.2).
+  const dbLotIds = new Set(dbLots.map((l) => l.id));
+  const annonces = [...dbLots, ...LOTS.filter((l) => !dbLotIds.has(l.id))]
+    .filter((l) => l.qte > 0)
+    .filter((l) => !isBlocked(l.eleveurId));
+  const userLots = user ? dbLots.filter((l) => l.eleveurId === user.id) : [];
 
   return (
     <AnnoncesContext.Provider value={{
       annonces, userLots, notifications, unreadCount,
-      addAnnonce, deleteAnnonce, deleteAnnoncesByAuthor, updateAnnonce, reduceStock, sendNotification, markNotifsRead,
+      addAnnonce, deleteAnnonce, deleteAnnoncesByAuthor, updateAnnonce,
+      reduceStock, adjustStock, sendNotification, markNotifsRead,
+      refreshAnnonces: fetchAnnonces,
     }}>
       {children}
     </AnnoncesContext.Provider>

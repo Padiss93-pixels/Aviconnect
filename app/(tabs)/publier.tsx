@@ -11,6 +11,27 @@ import { REGIONS, PRODUCT_EMOJIS, PRODUCT_LABELS, type ProductType } from '@/con
 import { useAuthContext } from '@/hooks/AuthContext';
 import { useAnnonces } from '@/hooks/AnnoncesContext';
 import { useBesoins } from '@/hooks/BesoinContext';
+import { useRewards } from '@/hooks/RewardsContext';
+import { supabase } from '@/lib/supabase';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+
+async function uploadPhoto(uri: string, userId: string): Promise<string | null> {
+  try {
+    const isBase64 = uri.startsWith('data:');
+    const ext = isBase64 ? (uri.startsWith('data:image/png') ? 'png' : 'jpg') : (uri.split('.').pop()?.toLowerCase() || 'jpg');
+    const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+    const fileName = `${userId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const res = await fetch(uri);
+    const arrayBuffer = await res.arrayBuffer();
+    const { error } = await supabase.storage.from('photos').upload(fileName, arrayBuffer, {
+      contentType: mimeType, upsert: false,
+    });
+    if (error) { console.error('[photo upload]', error.message); return null; }
+    return supabase.storage.from('photos').getPublicUrl(fileName).data.publicUrl;
+  } catch (e) {
+    console.error('[photo upload] error', e); return null;
+  }
+}
 
 const PRODUCTS_ELEVEUR: ProductType[] = ['poulet', 'poussin', 'oeuf', 'aliment'];
 const PRODUCTS_COUVOIR: ProductType[] = ['poussin', 'aliment'];
@@ -22,6 +43,8 @@ const DISPOS = ['Immédiat', 'Dans 3 jours', 'Dans 1 semaine', 'Dans 2 semaines'
 function AnnounceForm() {
   const { user } = useAuthContext();
   const { addAnnonce } = useAnnonces();
+  const isOnline = useNetworkStatus();
+  const { award } = useRewards();
   const [produit, setProduit] = useState<ProductType>(user?.role === 'couvoir' ? 'poussin' : 'poulet');
   const [photos, setPhotos] = useState<string[]>([]);
   const [titre, setTitre] = useState('');
@@ -83,9 +106,19 @@ function AnnounceForm() {
       if (Platform.OS === 'web') window.alert(msg); else Alert.alert('Champs manquants', msg);
       return;
     }
+    if (!isOnline) {
+      const msg = 'Pas de connexion internet. Reconnectez-vous pour publier.';
+      if (Platform.OS === 'web') window.alert(msg); else Alert.alert('Hors-ligne', msg);
+      return;
+    }
     setLoading(true);
+    // Upload photos vers Supabase Storage
+    let uploadedUrls: string[] = [];
+    if (photos.length > 0) {
+      const results = await Promise.all(photos.map((uri) => uploadPhoto(uri, user.id)));
+      uploadedUrls = results.filter(Boolean) as string[];
+    }
     await addAnnonce({
-      id: Date.now(),
       eleveur: user.prenom + ' ' + user.nom,
       eleveurId: user.id,
       eleveurPhone: user.phone || '',
@@ -96,8 +129,9 @@ function AnnounceForm() {
       dispo,
       detail: description || '',
       createdAt: new Date().toISOString().slice(0, 10),
-      photos: photos.length > 0 ? photos : undefined,
+      photos: uploadedUrls.length > 0 ? uploadedUrls : undefined,
     });
+    await award('publish');
     setLoading(false);
     setTitre(''); setQte(''); setPrix(''); setDescription(''); setPhotos([]);
     const msg = 'Elle est maintenant visible sur le marché.';
@@ -205,6 +239,7 @@ function AnnounceForm() {
 function BesoinForm() {
   const { user } = useAuthContext();
   const { addBesoin } = useBesoins();
+  const { award } = useRewards();
   const [produit, setProduit] = useState<ProductType>('poulet');
   const [qte, setQte] = useState('');
   const [prixMax, setPrixMax] = useState('');
@@ -226,7 +261,6 @@ function BesoinForm() {
     }
     setLoading(true);
     await addBesoin({
-      id: Date.now(),
       acheteurId: user.id,
       acheteurNom: user.prenom + ' ' + user.nom,
       acheteurPhone: user.phone,
@@ -236,8 +270,8 @@ function BesoinForm() {
       region,
       detail,
       dateExpiry: '',
-      createdAt: new Date().toISOString().slice(0, 10),
     });
+    await award('besoin');
     setLoading(false);
     setQte(''); setPrixMax(''); setDetail('');
     const msg = 'Les vendeurs peuvent maintenant vous contacter.';

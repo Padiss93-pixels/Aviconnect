@@ -64,10 +64,11 @@ export default function MonCatalogue() {
     if (!form.prix || isNaN(prix) || prix < 0) { Alert.alert('Prix invalide', 'Entrez un prix valide en F CFA.'); return; }
     if (!user) return;
     setSaving(true);
+    const photo = form.photo && !form.photo.startsWith('blob:') ? form.photo : undefined;
     if (editingProduit) {
-      await updateProduit(user.id, { ...editingProduit, ...form, prix, photo: form.photo || undefined });
+      await updateProduit(user.id, { ...editingProduit, ...form, prix, photo });
     } else {
-      await addProduit(user.id, { ...form, prix, photo: form.photo || undefined });
+      await addProduit(user.id, { ...form, prix, photo });
     }
     await loadData();
     setSaving(false);
@@ -193,8 +194,8 @@ export default function MonCatalogue() {
         ) : (
           catalogue.map((p) => (
             <View key={p.id} style={styles.produitCard}>
-              {p.photo && (
-                <Image source={{ uri: p.photo }} style={styles.produitPhoto} />
+              {p.photo && !p.photo.startsWith('blob:') && (
+                <Image source={{ uri: p.photo }} style={styles.produitPhoto} onError={() => {}} />
               )}
               <View style={styles.produitTop}>
                 {!p.photo && (

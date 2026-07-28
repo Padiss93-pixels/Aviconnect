@@ -1,12 +1,13 @@
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import { Heart, Images, MapPin, ShoppingCart } from 'lucide-react-native';
 import { Colors, Fonts, Radius, Shadows } from '@/constants/theme';
 import { type Lot, PRODUCT_EMOJIS } from '@/constants/mockData';
 import CachedImage from './CachedImage';
+import { useFavorites } from '@/hooks/FavoritesContext';
 
-type Props = { lot: Lot; compact?: boolean };
+type Props = { lot: Lot; compact?: boolean; isBoosted?: boolean };
 
 const PRODUCT_LABELS: Record<string, string> = {
   poulet:  'Poulet de chair',
@@ -29,8 +30,9 @@ const PLACEHOLDER_BG: Record<string, string> = {
   aliment: '#E9EFE3',
 };
 
-function LotCard({ lot, compact }: Props) {
-  const [fav, setFav] = useState(false);
+function LotCard({ lot, compact, isBoosted }: Props) {
+  const { favoriteIds, toggleFavorite } = useFavorites();
+  const fav = favoriteIds.has(lot.id);
   const go = () => router.push({ pathname: '/lot/[id]', params: { id: lot.id } });
   const hasPhoto = lot.photos && lot.photos.length > 0;
   const badge = BADGE[lot.produit] || { bg: 'rgba(255,255,255,0.94)', color: Colors.text };
@@ -57,13 +59,18 @@ function LotCard({ lot, compact }: Props) {
           )}
           <TouchableOpacity
             style={styles.compactHeart}
-            onPress={(e) => { e.stopPropagation?.(); setFav(v => !v); }}
+            onPress={(e) => { e.stopPropagation?.(); toggleFavorite(lot.id); }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Heart size={14} color="#fff" fill={fav ? Colors.accent : 'transparent'} strokeWidth={1.8} />
+            <Heart size={16} color="#fff" fill={fav ? Colors.accent : 'transparent'} strokeWidth={1.9} />
           </TouchableOpacity>
         </View>
         <View style={styles.compactBody}>
+          {isBoosted && (
+            <View style={styles.compactSponsoredBadge}>
+              <Text style={styles.compactSponsoredText}>⚡ Sponsorisé</Text>
+            </View>
+          )}
           <Text style={styles.compactTitle} numberOfLines={2}>{lot.titre}</Text>
           <View style={styles.compactLocRow}>
             <MapPin size={10} color={Colors.textMuted} strokeWidth={1.8} />
@@ -102,13 +109,20 @@ function LotCard({ lot, compact }: Props) {
             </Text>
           </View>
 
+          {/* Badge sponsorisé */}
+          {isBoosted && (
+            <View style={styles.sponsoredBadge}>
+              <Text style={styles.sponsoredText}>⚡ Sponsorisé</Text>
+            </View>
+          )}
+
           {/* Cœur */}
           <TouchableOpacity
             style={styles.heartBtn}
-            onPress={(e) => { e.stopPropagation?.(); setFav(v => !v); }}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            onPress={(e) => { e.stopPropagation?.(); toggleFavorite(lot.id); }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Heart size={17} color="#fff" fill={fav ? Colors.accent : 'transparent'} strokeWidth={1.8} />
+            <Heart size={19} color="#fff" fill={fav ? Colors.accent : 'transparent'} strokeWidth={1.9} />
           </TouchableOpacity>
 
           {/* Nb photos */}
@@ -136,8 +150,8 @@ function LotCard({ lot, compact }: Props) {
               <Text style={styles.qte}>{qteShort} disponibles</Text>
             </View>
             <View style={[styles.dispoBadge, lot.dispo === 'Immédiat' && styles.dispoImmediat]}>
-              <Text style={[styles.dispoText, lot.dispo === 'Immédiat' && styles.dispoTextImmediat]}>
-                {lot.dispo === 'Immédiat' ? '● Dispo' : lot.dispo}
+              <Text style={[styles.dispoText, lot.dispo === 'Immédiat' && styles.dispoTextImmediat]} numberOfLines={2}>
+                {lot.dispo === 'Immédiat' ? '● Dispo' : lot.dispo.replace('Dans ', '').replace(' semaine', 'sem').replace(' semaines', 'sem').replace(' jours', 'j')}
               </Text>
             </View>
           </View>
@@ -183,11 +197,24 @@ const styles = StyleSheet.create({
   catBadgeText: { fontSize: 10, fontFamily: Fonts.bodyBold, letterSpacing: 0.4, textTransform: 'uppercase' },
 
   heartBtn: {
-    position: 'absolute', top: 9, right: 9,
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: 'rgba(36,31,25,0.32)',
+    position: 'absolute', top: 8, right: 8,
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: 'rgba(36,31,25,0.36)',
     justifyContent: 'center', alignItems: 'center',
   },
+
+  sponsoredBadge: {
+    position: 'absolute', bottom: 9, left: 9,
+    backgroundColor: Colors.gold,
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: Radius.pill,
+  },
+  sponsoredText: { fontSize: 9.5, fontFamily: Fonts.bodyBold, color: '#fff', letterSpacing: 0.3 },
+
+  compactSponsoredBadge: {
+    backgroundColor: Colors.gold, borderRadius: Radius.pill,
+    alignSelf: 'flex-start', paddingHorizontal: 7, paddingVertical: 3, marginBottom: 4,
+  },
+  compactSponsoredText: { fontSize: 9, fontFamily: Fonts.bodyBold, color: '#fff' },
 
   photoCounter: {
     position: 'absolute', bottom: 9, right: 9,
@@ -200,38 +227,38 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: 13, paddingVertical: 13 },
 
   title: {
-    fontSize: 14, fontFamily: Fonts.bodyBold,
-    color: Colors.text, lineHeight: 19, marginBottom: 6,
+    fontSize: 14.5, fontFamily: Fonts.bodyBold,
+    color: Colors.text, lineHeight: 20, marginBottom: 6,
   },
 
   locRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 12 },
-  locText: { fontSize: 11.5, fontFamily: Fonts.body, color: Colors.textMuted, flex: 1, lineHeight: 15 },
+  locText: { fontSize: 12.5, fontFamily: Fonts.bodyMedium, color: Colors.textTertiary, flex: 1, lineHeight: 16 },
 
   priceRow: {
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'flex-end', marginBottom: 12,
   },
-  price: { fontSize: 17, fontFamily: Fonts.bodyExtraBold, color: Colors.primary, letterSpacing: -0.3 },
-  priceSub: { fontSize: 11, fontFamily: Fonts.bodyMedium, color: Colors.textMuted },
-  qte: { fontSize: 10.5, fontFamily: Fonts.body, color: Colors.textMuted, marginTop: 2 },
+  price: { fontSize: 19, fontFamily: Fonts.bodyExtraBold, color: Colors.primaryDark, letterSpacing: -0.3 },
+  priceSub: { fontSize: 11.5, fontFamily: Fonts.bodySemiBold, color: Colors.textTertiary },
+  qte: { fontSize: 11.5, fontFamily: Fonts.bodyMedium, color: Colors.textTertiary, marginTop: 2 },
 
   dispoBadge: {
     backgroundColor: Colors.surfaceSecondary,
-    paddingHorizontal: 9, paddingVertical: 5, borderRadius: Radius.sm,
+    paddingHorizontal: 9, paddingVertical: 6, borderRadius: Radius.sm,
   },
-  dispoImmediat: { backgroundColor: Colors.primaryLight },
-  dispoText: { fontSize: 10.5, fontFamily: Fonts.bodySemiBold, color: Colors.textTertiary },
-  dispoTextImmediat: { color: Colors.primary },
+  dispoImmediat: { backgroundColor: Colors.primaryTint },
+  dispoText: { fontSize: 11, fontFamily: Fonts.bodyBold, color: Colors.textTertiary },
+  dispoTextImmediat: { color: Colors.primaryDark },
 
   cmdBtn: {
     backgroundColor: Colors.primary,
     borderRadius: Radius.pill,
-    paddingVertical: 11,
+    paddingVertical: 13, minHeight: 46,
     flexDirection: 'row',
     justifyContent: 'center', alignItems: 'center',
     ...(Shadows.button as object),
   },
-  cmdBtnText: { color: '#fff', fontSize: 13.5, fontFamily: Fonts.bodyBold, letterSpacing: 0.1 },
+  cmdBtnText: { color: '#fff', fontSize: 14, fontFamily: Fonts.bodyBold, letterSpacing: 0.1 },
 
   // ── Compact ────────────────────────────────────────────────────────────
   compact: {
@@ -245,15 +272,15 @@ const styles = StyleSheet.create({
   compactImg: { height: 104, justifyContent: 'center', alignItems: 'center' },
   compactEmoji: { fontSize: 36 },
   compactHeart: {
-    position: 'absolute', top: 7, right: 7,
-    width: 27, height: 27, borderRadius: 14,
-    backgroundColor: 'rgba(36,31,25,0.3)',
+    position: 'absolute', top: 6, right: 6,
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: 'rgba(36,31,25,0.34)',
     justifyContent: 'center', alignItems: 'center',
   },
-  compactBody: { padding: 11 },
-  compactTitle: { fontSize: 12.5, fontFamily: Fonts.bodyBold, color: Colors.text, marginBottom: 4, lineHeight: 17 },
+  compactBody: { padding: 12 },
+  compactTitle: { fontSize: 13, fontFamily: Fonts.bodyBold, color: Colors.text, marginBottom: 4, lineHeight: 18 },
   compactLocRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 6 },
-  compactLoc: { fontSize: 10.5, fontFamily: Fonts.body, color: Colors.textMuted, flex: 1 },
-  compactPrice: { fontSize: 14.5, fontFamily: Fonts.bodyExtraBold, color: Colors.primary, letterSpacing: -0.2 },
-  compactPriceSub: { fontSize: 10, fontFamily: Fonts.bodyMedium, color: Colors.textMuted },
+  compactLoc: { fontSize: 11.5, fontFamily: Fonts.bodyMedium, color: Colors.textTertiary, flex: 1 },
+  compactPrice: { fontSize: 16, fontFamily: Fonts.bodyExtraBold, color: Colors.primaryDark, letterSpacing: -0.2 },
+  compactPriceSub: { fontSize: 10.5, fontFamily: Fonts.bodySemiBold, color: Colors.textTertiary },
 });

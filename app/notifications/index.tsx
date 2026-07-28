@@ -4,13 +4,15 @@ import { router } from 'expo-router';
 import { Colors } from '@/constants/Colors';
 import { useAnnonces, type NotifType } from '@/hooks/AnnoncesContext';
 
-const TYPE_CONFIG: Record<NotifType, { emoji: string; color: string; bg: string }> = {
-  nouvelle_commande: { emoji: '🛒', color: '#92400e', bg: '#fef3c7' },
-  commande_acceptee: { emoji: '✅', color: '#166534', bg: '#dcfce7' },
-  commande_refusee:  { emoji: '❌', color: '#991b1b', bg: '#fee2e2' },
-  paiement_recu:     { emoji: '💰', color: '#1e40af', bg: '#dbeafe' },
-  couvoir_inscription: { emoji: '🏭', color: '#9a3412', bg: '#ffedd5' },
-  vet_inscription:     { emoji: '💉', color: '#5b21b6', bg: '#ede9fe' },
+const TYPE_CONFIG: Record<NotifType, { emoji: string; color: string; bg: string; link?: string }> = {
+  nouvelle_commande:    { emoji: '🛒', color: '#92400e', bg: '#fef3c7', link: '/commandes' },
+  commande_acceptee:    { emoji: '✅', color: '#166534', bg: '#dcfce7', link: '/commandes' },
+  commande_refusee:     { emoji: '❌', color: '#991b1b', bg: '#fee2e2', link: '/commandes' },
+  paiement_recu:        { emoji: '💰', color: '#1e40af', bg: '#dbeafe', link: '/commandes' },
+  couvoir_inscription:  { emoji: '🏭', color: '#9a3412', bg: '#ffedd5', link: '/admin/couvoirs' },
+  vet_inscription:      { emoji: '💉', color: '#5b21b6', bg: '#ede9fe', link: '/admin/veterinaires' },
+  boost_demande:        { emoji: '⚡', color: '#92600A', bg: '#FFFBF0', link: '/admin/boosts' },
+  abonnement_demande:   { emoji: '👑', color: '#92600A', bg: '#FFFBF0', link: '/admin/boosts' },
 };
 
 async function requestPushPermission() {
@@ -73,8 +75,8 @@ export default function NotificationsScreen() {
                 <TouchableOpacity
                   key={n.id}
                   style={[styles.card, { borderLeftColor: cfg.bg }]}
-                  onPress={() => n.orderId && router.push('/commandes' as any)}
-                  activeOpacity={n.orderId ? 0.7 : 1}
+                  onPress={() => cfg.link && router.push(cfg.link as any)}
+                  activeOpacity={cfg.link ? 0.7 : 1}
                 >
                   <View style={[styles.iconBox, { backgroundColor: cfg.bg }]}>
                     <Text style={styles.icon}>{cfg.emoji}</Text>
@@ -83,8 +85,8 @@ export default function NotificationsScreen() {
                     <Text style={styles.cardTitle}>{n.title}</Text>
                     <Text style={styles.cardBody}>{n.body}</Text>
                     <Text style={styles.cardDate}>{formatDate(n.date)}</Text>
-                    {n.orderId && (
-                      <Text style={styles.cardLink}>Voir la commande →</Text>
+                    {cfg.link && (
+                      <Text style={styles.cardLink}>Voir →</Text>
                     )}
                   </View>
                 </TouchableOpacity>

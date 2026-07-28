@@ -49,21 +49,19 @@ export default function AdminActualites() {
     }
     setLoading(true);
     await addActualite({
-      id: Date.now(),
       titre: titre.trim(),
       resume: resume.trim(),
       contenu: contenu.trim(),
       categorie,
       auteurId: user.id,
       auteurNom: user.prenom + ' ' + user.nom,
-      createdAt: new Date().toISOString().slice(0, 10),
     });
     setLoading(false);
     setTitre(''); setResume(''); setContenu('');
     setTab('liste');
   };
 
-  const handleDelete = (id: number, titre: string) => {
+  const handleDelete = (id: string, titre: string) => {
     const doDelete = async () => { await deleteActualite(id); };
     if (Platform.OS === 'web') {
       if (window.confirm(`Supprimer "${titre}" ?`)) doDelete();
@@ -114,7 +112,7 @@ export default function AdminActualites() {
           )}
           {actualites.map((a) => {
             const cat = CATEGORIE_COLORS[a.categorie];
-            const isMock = a.auteurId === 'admin' && a.id < 100;
+            const isMock = a.auteurId === 'admin' && Number(a.id) < 100;
             return (
               <View key={a.id} style={styles.card}>
                 <View style={styles.cardTop}>

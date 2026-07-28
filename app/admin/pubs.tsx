@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, Platform, Alert, Switch, ActivityIndicator,
+  TextInput, Platform, Alert, Switch, ActivityIndicator, Image,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Colors } from '@/constants/Colors';
@@ -14,36 +14,43 @@ const BG_PRESETS = [
 ];
 
 function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  const noColor = value === '';
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+      {/* Option "Aucune couleur" */}
+      <TouchableOpacity
+        onPress={() => onChange('')}
+        style={[cp.swatch, cp.swatchNone, noColor && cp.swatchActive]}
+      >
+        <Text style={{ fontSize: 14 }}>✕</Text>
+      </TouchableOpacity>
       {BG_PRESETS.map((c) => (
         <TouchableOpacity
           key={c}
           onPress={() => onChange(c)}
-          style={[
-            cp.swatch,
-            { backgroundColor: c },
-            value === c && cp.swatchActive,
-          ]}
+          style={[cp.swatch, { backgroundColor: c }, value === c && cp.swatchActive]}
         />
       ))}
-      <View style={[cp.swatch, { backgroundColor: value, borderStyle: 'dashed' }]}>
-        <TextInput
-          style={cp.hexInput}
-          value={value}
-          onChangeText={onChange}
-          maxLength={7}
-          autoCapitalize="none"
-          placeholder="#"
-          placeholderTextColor="rgba(255,255,255,0.5)"
-        />
-      </View>
+      {!noColor && (
+        <View style={[cp.swatch, { backgroundColor: value, borderStyle: 'dashed' }]}>
+          <TextInput
+            style={cp.hexInput}
+            value={value}
+            onChangeText={onChange}
+            maxLength={7}
+            autoCapitalize="none"
+            placeholder="#"
+            placeholderTextColor="rgba(255,255,255,0.5)"
+          />
+        </View>
+      )}
     </View>
   );
 }
 const cp = StyleSheet.create({
   swatch: { width: 34, height: 34, borderRadius: 8, borderWidth: 2, borderColor: 'transparent', justifyContent: 'center', alignItems: 'center' },
-  swatchActive: { borderColor: '#fff', transform: [{ scale: 1.15 }] },
+  swatchNone: { backgroundColor: '#f1f5f9', borderColor: '#cbd5e1', borderWidth: 1.5 },
+  swatchActive: { borderColor: Colors.primary, transform: [{ scale: 1.15 }] },
   hexInput: { fontSize: 8, color: '#fff', width: 32, textAlign: 'center' },
 });
 
@@ -58,6 +65,7 @@ function BannerForm({
   const [title, setTitle] = useState(initial?.title || '');
   const [sub, setSub] = useState(initial?.sub || '');
   const [lien, setLien] = useState(initial?.lien || '');
+  const [image, setImage] = useState(initial?.image || '');
   const [bg, setBg] = useState(initial?.bg || '#15803d');
   const [actif, setActif] = useState(initial?.actif ?? true);
 
@@ -85,10 +93,31 @@ function BannerForm({
       {lien.length > 0 && !lien.startsWith('http') && (
         <Text style={form.lienWarn}>⚠️ Le lien doit commencer par https://</Text>
       )}
+      <Text style={form.label}>Image (optionnel)</Text>
+      <Text style={form.sublabel}>URL d'une image à afficher dans la bannière</Text>
+      <View style={form.lienRow}>
+        <Text style={form.lienIcon}>🖼</Text>
+        <TextInput
+          style={[form.input, { flex: 1, marginBottom: 0 }]}
+          value={image}
+          onChangeText={setImage}
+          placeholder="https://exemple.com/image.jpg"
+          placeholderTextColor={Colors.textMuted}
+          keyboardType="url"
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      </View>
+      {image.length > 0 && !image.startsWith('http') && (
+        <Text style={form.lienWarn}>⚠️ L'URL doit commencer par https://</Text>
+      )}
       <Text style={form.label}>Couleur de fond</Text>
       <ColorPicker value={bg} onChange={setBg} />
       <View style={form.preview}>
-        <View style={[form.previewSlide, { backgroundColor: bg }]}>
+        <View style={[form.previewSlide, { backgroundColor: bg || '#64748b' }]}>
+          {image.length > 0 && image.startsWith('http') && (
+            <Image source={{ uri: image }} style={[StyleSheet.absoluteFillObject, { borderRadius: 12, opacity: bg ? 0.4 : 1 }]} resizeMode="cover" />
+          )}
           <Text style={form.previewTitle}>{title || 'Titre'}</Text>
           <Text style={form.previewSub}>{sub || 'Sous-titre'}</Text>
           {lien.length > 0 && <Text style={form.previewLien}>🔗 {lien}</Text>}
@@ -105,7 +134,7 @@ function BannerForm({
         <TouchableOpacity
           style={[form.saveBtn, !valid && form.saveBtnDisabled]}
           disabled={!valid}
-          onPress={() => onSave({ title: title.trim(), sub: sub.trim(), lien: lien.trim() || undefined, bg, actif })}
+          onPress={() => onSave({ title: title.trim(), sub: sub.trim(), lien: lien.trim() || undefined, image: image.trim() || undefined, bg, actif })}
         >
           <Text style={form.saveText}>Enregistrer</Text>
         </TouchableOpacity>
@@ -126,6 +155,7 @@ function MarchePubForm({
   const [description, setDescription] = useState(initial?.description || '');
   const [emoji, setEmoji] = useState(initial?.emoji || '📢');
   const [lien, setLien] = useState(initial?.lien || '');
+  const [image, setImage] = useState(initial?.image || '');
   const [bg, setBg] = useState(initial?.bg || '#1d4ed8');
   const [actif, setActif] = useState(initial?.actif ?? true);
 
@@ -155,6 +185,21 @@ function MarchePubForm({
       {lien.length > 0 && !lien.startsWith('http') && (
         <Text style={form.lienWarn}>⚠️ Le lien doit commencer par https://</Text>
       )}
+      <Text style={form.label}>Image (optionnel)</Text>
+      <Text style={form.sublabel}>URL directe d'une image — sinon l'image du site sera récupérée automatiquement</Text>
+      <View style={form.lienRow}>
+        <Text style={form.lienIcon}>🖼</Text>
+        <TextInput
+          style={[form.input, { flex: 1, marginBottom: 0 }]}
+          value={image}
+          onChangeText={setImage}
+          placeholder="https://exemple.com/image.jpg"
+          placeholderTextColor={Colors.textMuted}
+          keyboardType="url"
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      </View>
       <Text style={form.label}>Couleur de fond</Text>
       <ColorPicker value={bg} onChange={setBg} />
       <View style={form.preview}>
@@ -179,7 +224,7 @@ function MarchePubForm({
         <TouchableOpacity
           style={[form.saveBtn, !valid && form.saveBtnDisabled]}
           disabled={!valid}
-          onPress={() => onSave({ titre: titre.trim(), description: description.trim(), emoji, lien: lien.trim() || undefined, bg, actif })}
+          onPress={() => onSave({ titre: titre.trim(), description: description.trim(), emoji, lien: lien.trim() || undefined, image: image.trim() || undefined, bg, actif })}
         >
           <Text style={form.saveText}>Enregistrer</Text>
         </TouchableOpacity>
@@ -206,6 +251,7 @@ const form = StyleSheet.create({
   lienRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
   lienIcon: { fontSize: 18 },
   lienWarn: { fontSize: 11, color: '#b45309', marginTop: 4 },
+  sublabel: { fontSize: 11, color: Colors.textMuted, marginBottom: 4, lineHeight: 15 },
   previewLien: { fontSize: 11, color: 'rgba(255,255,255,0.8)', marginTop: 4, textDecorationLine: 'underline' },
   switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
   actions: { flexDirection: 'row', gap: 10, marginTop: 14 },

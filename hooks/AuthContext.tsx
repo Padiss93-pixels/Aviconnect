@@ -1,19 +1,34 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { supabase } from '@/lib/supabase';
 import {
-  getStoredUser, storeUser, clearUser, User,
-  isUserBlocked, getAllUsers, setUserBlocked, setCouvoirStatus, setVetStatus,
-  deleteUserFromRegistry, purgeUserData,
+  User, fetchProfile, getAllUsers, storeUser,
+  setUserBlocked, setCouvoirStatus, setVetStatus,
+  deleteOwnAccount, adminDeleteUser,
 } from './useAuth';
+
+export type SignUpParams = {
+  email: string;
+  password: string;
+  prenom: string;
+  nom: string;
+  phone: string;
+  role: 'eleveur' | 'acheteur' | 'couvoir' | 'veterinaire';
+  region: string;
+  ferme?: string;
+  clinique?: string;
+};
 
 type AuthContextType = {
   user: User | null;
   isLoading: boolean;
   isAdmin: boolean;
-  signIn: (user: User) => Promise<{ error?: string }>;
+  signIn: (email: string, password: string) => Promise<{ error?: string }>;
+  signUp: (params: SignUpParams) => Promise<{ error?: string; needsConfirmation?: boolean }>;
   signOut: () => Promise<void>;
+  updateProfile: (user: User) => Promise<{ error?: string }>;
   blockUser: (userId: string) => Promise<void>;
   unblockUser: (userId: string) => Promise<void>;
-  deleteUser: (userId: string) => Promise<void>;
+  deleteUser: (userId: string) => Promise<{ error?: string }>;
   getAllUsers: () => Promise<User[]>;
   updateCouvoirStatus: (userId: string, status: 'pending' | 'certified' | 'rejected') => Promise<void>;
   updateVetStatus: (userId: string, status: 'pending' | 'certified' | 'rejected') => Promise<void>;
@@ -24,63 +39,154 @@ const AuthContext = createContext<AuthContextType>({
   isLoading: true,
   isAdmin: false,
   signIn: async () => ({}),
+  signUp: async () => ({}),
   signOut: async () => {},
+  updateProfile: async () => ({}),
   blockUser: async () => {},
   unblockUser: async () => {},
-  deleteUser: async () => {},
+  deleteUser: async () => ({}),
   getAllUsers: async () => [],
   updateCouvoirStatus: async () => {},
   updateVetStatus: async () => {},
 });
 
+function frenchAuthError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes('invalid login credentials')) return 'Email ou mot de passe incorrect.';
+  if (m.includes('email not confirmed')) return 'Confirme d\'abord ton email — regarde ta boîte de réception.';
+  if (m.includes('already registered')) return 'Un compte existe déjà avec cet email. Connecte-toi plutôt.';
+  if (m.includes('rate limit') || m.includes('too many')) return 'Trop de tentatives. Réessaye dans quelques minutes.';
+  if (m.includes('network') || m.includes('fetch')) return 'Problème de connexion internet. Vérifie ton réseau.';
+  if (m.includes('password should be')) return 'Mot de passe trop faible (8 caractères minimum).';
+  return message;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  // Évite d'écraser l'état pendant un signIn explicite (course avec onAuthStateChange)
+  const signingIn = useRef(false);
+
+  const loadProfile = async (userId: string): Promise<User | null> => {
+    const profile = await fetchProfile(userId);
+    if (profile?.blocked) {
+      await supabase.auth.signOut();
+      return null;
+    }
+    return profile;
+  };
 
   useEffect(() => {
-    getStoredUser().then(async (u) => {
-      if (u) {
-        const blocked = await isUserBlocked(u.id);
-        if (blocked) {
-          await clearUser();
-          setUser(null);
-        } else {
-          setUser(u);
-        }
+    let mounted = true;
+
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user && mounted) {
+        const profile = await loadProfile(session.user.id);
+        if (mounted) setUser(profile);
       }
-      setIsLoading(false);
+      if (mounted) setIsLoading(false);
     });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (signingIn.current) return;
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+      } else if (event === 'SIGNED_IN' && session?.user) {
+        // setTimeout : ne jamais faire d'appel Supabase directement dans ce callback (deadlock)
+        setTimeout(async () => {
+          const profile = await loadProfile(session.user.id);
+          if (mounted) setUser(profile);
+        }, 0);
+      }
+    });
+
+    return () => { mounted = false; subscription.unsubscribe(); };
   }, []);
 
-  const signIn = async (u: User): Promise<{ error?: string }> => {
-    if (u.id) {
-      const blocked = await isUserBlocked(u.id);
-      if (blocked) return { error: 'Votre compte a été suspendu. Contactez le support AviConnect.' };
+  const signIn = async (email: string, password: string): Promise<{ error?: string }> => {
+    signingIn.current = true;
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.toLowerCase().trim(),
+        password,
+      });
+      if (error) return { error: frenchAuthError(error.message) };
+      const profile = await fetchProfile(data.user.id);
+      if (!profile) return { error: 'Profil introuvable. Contacte le support AviConnect.' };
+      if (profile.blocked) {
+        await supabase.auth.signOut();
+        return { error: 'Ton compte a été suspendu. Écris-nous, on regarde ça avec toi.' };
+      }
+      setUser(profile);
+      return {};
+    } finally {
+      signingIn.current = false;
     }
-    if (u.blocked) return { error: 'Votre compte a été suspendu. Contactez le support AviConnect.' };
-    await storeUser(u);
-    setUser(u);
-    return {};
+  };
+
+  const signUp = async (params: SignUpParams): Promise<{ error?: string; needsConfirmation?: boolean }> => {
+    signingIn.current = true;
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: params.email.toLowerCase().trim(),
+        password: params.password,
+        options: {
+          data: {
+            prenom: params.prenom,
+            nom: params.nom,
+            phone: params.phone,
+            role: params.role,
+            region: params.region,
+            ferme: params.ferme || '',
+            clinique: params.clinique || '',
+          },
+        },
+      });
+      if (error) return { error: frenchAuthError(error.message) };
+      if (!data.session) return { needsConfirmation: true };
+      // Le trigger handle_new_user peut prendre quelques ms — on réessaie jusqu'à 5×
+      let profile = null;
+      for (let i = 0; i < 5; i++) {
+        profile = await fetchProfile(data.user!.id);
+        if (profile) break;
+        await new Promise((r) => setTimeout(r, 600));
+      }
+      setUser(profile);
+      return {};
+    } finally {
+      signingIn.current = false;
+    }
   };
 
   const signOut = async () => {
-    await clearUser();
+    await supabase.auth.signOut();
     setUser(null);
+  };
+
+  const updateProfile = async (updated: User): Promise<{ error?: string }> => {
+    const result = await storeUser(updated);
+    if (!result.error) setUser(updated);
+    return result;
   };
 
   const blockUser = async (userId: string) => {
     await setUserBlocked(userId, true);
-    if (user?.id === userId) { await clearUser(); setUser(null); }
   };
 
   const unblockUser = async (userId: string) => {
     await setUserBlocked(userId, false);
   };
 
-  const deleteUser = async (userId: string) => {
-    await deleteUserFromRegistry(userId);
-    await purgeUserData(userId);
-    if (user?.id === userId) { await clearUser(); setUser(null); }
+  const deleteUser = async (userId: string): Promise<{ error?: string }> => {
+    if (user?.id === userId) {
+      const result = await deleteOwnAccount();
+      if (!result.error) {
+        await supabase.auth.signOut();
+        setUser(null);
+      }
+      return result;
+    }
+    return adminDeleteUser(userId);
   };
 
   const updateCouvoirStatus = async (userId: string, status: 'pending' | 'certified' | 'rejected') => {
@@ -94,7 +200,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider value={{
       user, isLoading, isAdmin: user?.role === 'admin',
-      signIn, signOut, blockUser, unblockUser, deleteUser, getAllUsers,
+      signIn, signUp, signOut, updateProfile,
+      blockUser, unblockUser, deleteUser, getAllUsers,
       updateCouvoirStatus, updateVetStatus,
     }}>
       {children}

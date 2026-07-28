@@ -1,9 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { type ProductType } from '@/constants/mockData';
-
-const KEY = '@aviconnect_besoins';
+import { supabase } from '@/lib/supabase';
+import { useModeration } from './ModerationContext';
 
 export type Besoin = {
   id: number;
@@ -15,30 +13,29 @@ export type Besoin = {
   prixMax: number;
   region: string;
   detail: string;
-  dateExpiry: string;  // date limite souhaitée
+  dateExpiry: string;
   createdAt: string;
 };
 
-async function readStorage(): Promise<Besoin[]> {
-  try {
-    const raw = Platform.OS === 'web'
-      ? localStorage.getItem(KEY)
-      : await AsyncStorage.getItem(KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-
-async function writeStorage(besoins: Besoin[]): Promise<void> {
-  try {
-    const json = JSON.stringify(besoins);
-    if (Platform.OS === 'web') localStorage.setItem(KEY, json);
-    else await AsyncStorage.setItem(KEY, json);
-  } catch {}
+function rowToBesoin(row: any): Besoin {
+  return {
+    id: row.id,
+    acheteurId: row.acheteur_id,
+    acheteurNom: row.acheteur_nom,
+    acheteurPhone: row.acheteur_phone ?? undefined,
+    produit: row.produit,
+    qte: row.qte,
+    prixMax: row.prix_max,
+    region: row.region,
+    detail: row.detail,
+    dateExpiry: row.date_expiry,
+    createdAt: row.created_at,
+  };
 }
 
 type BesoinContextType = {
   besoins: Besoin[];
-  addBesoin: (b: Besoin) => Promise<void>;
+  addBesoin: (b: Omit<Besoin, 'id' | 'createdAt'>) => Promise<void>;
   deleteBesoin: (id: number) => Promise<void>;
   getBesoinsForAcheteur: (acheteurId: string) => Besoin[];
 };
@@ -51,21 +48,40 @@ const BesoinContext = createContext<BesoinContextType>({
 });
 
 export function BesoinProvider({ children }: { children: React.ReactNode }) {
-  const [besoins, setBesoins] = useState<Besoin[]>([]);
+  const { isBlocked } = useModeration();
+  const [allBesoins, setBesoins] = useState<Besoin[]>([]);
+  // Les besoins publiés par un utilisateur bloqué sont masqués (App Store 1.2).
+  const besoins = allBesoins.filter((b) => !isBlocked(b.acheteurId));
 
-  useEffect(() => { readStorage().then(setBesoins); }, []);
+  useEffect(() => {
+    supabase
+      .from('besoins')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (!error && data) setBesoins(data.map(rowToBesoin));
+      });
+  }, []);
 
-  const addBesoin = useCallback(async (b: Besoin) => {
-    const updated = [b, ...besoins];
-    setBesoins(updated);
-    await writeStorage(updated);
-  }, [besoins]);
+  const addBesoin = useCallback(async (b: Omit<Besoin, 'id' | 'createdAt'>) => {
+    const { data, error } = await supabase.from('besoins').insert({
+      acheteur_id: b.acheteurId,
+      acheteur_nom: b.acheteurNom,
+      acheteur_phone: b.acheteurPhone ?? null,
+      produit: b.produit,
+      qte: b.qte,
+      prix_max: b.prixMax,
+      region: b.region,
+      detail: b.detail,
+      date_expiry: b.dateExpiry,
+    }).select().single();
+    if (!error && data) setBesoins((prev) => [rowToBesoin(data), ...prev]);
+  }, []);
 
   const deleteBesoin = useCallback(async (id: number) => {
-    const updated = besoins.filter((b) => b.id !== id);
-    setBesoins(updated);
-    await writeStorage(updated);
-  }, [besoins]);
+    await supabase.from('besoins').delete().eq('id', id);
+    setBesoins((prev) => prev.filter((b) => b.id !== id));
+  }, []);
 
   const getBesoinsForAcheteur = useCallback((acheteurId: string) =>
     besoins.filter((b) => b.acheteurId === acheteurId),

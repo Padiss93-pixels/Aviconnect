@@ -5,79 +5,16 @@ import {
   Platform,
 } from 'react-native';
 import { router } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { ChevronLeft, Egg, ShoppingBag, Factory, Stethoscope } from 'lucide-react-native';
 import { Colors, Fonts, Radius } from '@/constants/theme';
 import Button from '@/components/ui/Button';
 import TextField from '@/components/ui/TextField';
 import { useAuthContext } from '@/hooks/AuthContext';
-import { registerUserInRegistry, savePassword, getAdminId } from '@/hooks/useAuth';
 import { REGIONS } from '@/constants/mockData';
 
-const NOTIF_KEY_PREFIX = '@aviconnect_notifs_';
-// Clé fixe pour les notifs admin (indépendante du compte admin)
-const ADMIN_NOTIF_KEY = '@aviconnect_notifs_admin';
-
-async function pushAdminNotif(notif: object) {
-  try {
-    // Stocke dans la clé fixe admin ET dans la clé du compte admin s'il existe
-    const keys: string[] = [ADMIN_NOTIF_KEY];
-    const adminId = await getAdminId();
-    if (adminId) keys.push(`${NOTIF_KEY_PREFIX}${adminId}`);
-    for (const key of keys) {
-      let existing: any[] = [];
-      try {
-        const raw = Platform.OS === 'web'
-          ? localStorage.getItem(key)
-          : await AsyncStorage.getItem(key);
-        existing = raw ? JSON.parse(raw) : [];
-      } catch {}
-      const updated = JSON.stringify([notif, ...existing]);
-      if (Platform.OS === 'web') localStorage.setItem(key, updated);
-      else await AsyncStorage.setItem(key, updated);
-    }
-  } catch {}
-}
-
-async function notifyAdminVet(vetNom: string, vetId: string) {
-  await pushAdminNotif({
-    id: Date.now(),
-    type: 'vet_inscription',
-    title: '💉 Nouveau vétérinaire à valider',
-    body: `${vetNom} vient de s'inscrire comme vétérinaire. Vérifiez et validez son profil.`,
-    date: new Date().toISOString(),
-    read: false,
-    vetId,
-  });
-}
-
-async function notifyAdmin(couvoirNom: string, couvoirId: string) {
-  try {
-    const adminId = await getAdminId();
-    if (!adminId) return;
-    const key = `${NOTIF_KEY_PREFIX}${adminId}`;
-    const notif = {
-      id: Date.now(),
-      type: 'couvoir_inscription',
-      title: '🏭 Nouveau couvoir à valider',
-      body: `${couvoirNom} vient de s'inscrire comme couvoir. Vérifiez et validez son profil.`,
-      date: new Date().toISOString(),
-      read: false,
-      couvoirId,
-    };
-    let existing: any[] = [];
-    try {
-      const raw = Platform.OS === 'web'
-        ? localStorage.getItem(key)
-        : await AsyncStorage.getItem(key);
-      existing = raw ? JSON.parse(raw) : [];
-    } catch {}
-    const updated = JSON.stringify([notif, ...existing]);
-    if (Platform.OS === 'web') localStorage.setItem(key, updated);
-    else await AsyncStorage.setItem(key, updated);
-  } catch {}
-}
+// Les notifications admin (nouveau couvoir / vétérinaire à valider) sont
+// désormais créées côté serveur par le trigger `notify_admins_on_signup`.
 
 const ROLES = [
   { key: 'eleveur',     Icon: Egg,          label: 'Éleveur',      desc: 'Je vends volailles, poussins ou œufs' },
@@ -86,12 +23,8 @@ const ROLES = [
   { key: 'veterinaire', Icon: Stethoscope,  label: 'Vétérinaire',  desc: 'Je propose soins et vaccins avicoles' },
 ] as const;
 
-function generateId(): string {
-  return `u_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
 export default function RegisterScreen() {
-  const { signIn } = useAuthContext();
+  const { signUp } = useAuthContext();
   const [role, setRole] = useState<'eleveur' | 'acheteur' | 'couvoir' | 'veterinaire'>('eleveur');
   const [prenom, setPrenom] = useState('');
   const [nom, setNom] = useState('');
@@ -103,18 +36,25 @@ export default function RegisterScreen() {
   const [region, setRegion] = useState('Dakar');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [confirmationSent, setConfirmationSent] = useState(false);
 
   const handleRegister = async () => {
-    if (!prenom.trim() || !nom.trim() || !email.trim() || !password.trim() || !phone.trim()) {
+    const nomRequired = role === 'couvoir' ? prenom.trim() : (prenom.trim() && nom.trim());
+    if (!nomRequired || !email.trim() || !password.trim() || !phone.trim()) {
       setError('Quelques champs obligatoires (*) restent à remplir');
       return;
     }
-    if (!email.includes('@')) {
+    const emailClean = email.toLowerCase().trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(emailClean) || emailClean.length > 254) {
       setError('Cette adresse email ne semble pas valide');
       return;
     }
-    if (password.length < 6) {
-      setError('Ton mot de passe doit faire au moins 6 caractères');
+    if (password.length < 8) {
+      setError('Ton mot de passe doit faire au moins 8 caractères');
+      return;
+    }
+    if (!/[a-zA-Z]/.test(password) || !/\d/.test(password)) {
+      setError('Ton mot de passe doit contenir au moins une lettre et un chiffre');
       return;
     }
     if (password !== confirmPassword) {
@@ -122,53 +62,56 @@ export default function RegisterScreen() {
       return;
     }
     const digits = phone.replace(/\D/g, '');
-    if (digits.length < 9) {
-      setError('Ton numéro sénégalais doit faire 9 chiffres');
+    if (!/^7\d{8}$/.test(digits)) {
+      setError('Ton numéro mobile sénégalais doit faire 9 chiffres et commencer par 7');
       return;
     }
     setError('');
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1200));
 
-    const newUser = {
-      id: generateId(),
+    // L'unicité de l'email est garantie par Supabase Auth.
+    const result = await signUp({
+      email: emailClean,
+      password,
+      prenom: role === 'couvoir' ? prenom.trim().slice(0, 80) : prenom.trim().slice(0, 60),
+      nom: role === 'couvoir' ? '' : nom.trim().slice(0, 60),
       phone: digits,
-      email: email.toLowerCase().trim(),
-      prenom: prenom.trim(),
-      nom: nom.trim(),
-      ferme: ferme.trim() || undefined,
-      region,
       role,
-      verified: false,
-      blocked: false,
-      ...(role === 'couvoir' ? { couvoirStatus: 'pending' as const } : {}),
-      ...(role === 'veterinaire' ? { vetStatus: 'pending' as const } : {}),
-    };
-
-    await registerUserInRegistry(newUser);
-    await savePassword(newUser.id, password);
-
-    if (role === 'couvoir') {
-      await notifyAdmin(
-        `${newUser.prenom} ${newUser.nom}${newUser.ferme ? ` (${newUser.ferme})` : ''}`,
-        newUser.id
-      );
-    }
-    if (role === 'veterinaire') {
-      await notifyAdminVet(
-        `${newUser.prenom} ${newUser.nom}${newUser.ferme ? ` (${newUser.ferme})` : ''}`,
-        newUser.id
-      );
-    }
-
-    const result = await signIn(newUser);
+      region,
+      ferme: ferme.trim().slice(0, 80) || undefined,
+    });
     setLoading(false);
     if (result.error) {
       setError(result.error);
       return;
     }
+    if (result.needsConfirmation) {
+      setConfirmationSent(true);
+      return;
+    }
     router.replace('/(tabs)');
   };
+
+  if (confirmationSent) {
+    return (
+      <View style={styles.confirmContainer}>
+        <Text style={styles.confirmIcon}>📬</Text>
+        <Text style={styles.confirmTitle}>Vérifie ta boîte mail</Text>
+        <Text style={styles.confirmText}>
+          On t'a envoyé un lien de confirmation à{'\n'}
+          <Text style={styles.confirmEmail}>{email.toLowerCase().trim()}</Text>
+          {'\n\n'}Clique dessus pour activer ton compte, puis connecte-toi.
+        </Text>
+        <Button
+          title="Aller à la connexion"
+          onPress={() => router.replace('/(auth)/login')}
+          showArrow
+          fullWidth
+          style={{ marginTop: 28, maxWidth: 320 }}
+        />
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -206,14 +149,18 @@ export default function RegisterScreen() {
 
           {/* Identité */}
           <Text style={styles.sectionLabel}>Identité</Text>
-          <View style={styles.row}>
-            <View style={{ flex: 1, marginRight: 8 }}>
-              <TextField label="Prénom *" value={prenom} onChangeText={setPrenom} placeholder="Moussa" />
+          {role === 'couvoir' ? (
+            <TextField label="Nom du couvoir *" value={prenom} onChangeText={setPrenom} placeholder="Couvoir Avicole Dakar" />
+          ) : (
+            <View style={styles.row}>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <TextField label="Prénom *" value={prenom} onChangeText={setPrenom} placeholder="Moussa" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <TextField label="Nom *" value={nom} onChangeText={setNom} placeholder="Diallo" />
+              </View>
             </View>
-            <View style={{ flex: 1 }}>
-              <TextField label="Nom *" value={nom} onChangeText={setNom} placeholder="Diallo" />
-            </View>
-          </View>
+          )}
 
           {/* Email */}
           <Text style={styles.sectionLabel}>Connexion</Text>
@@ -226,7 +173,7 @@ export default function RegisterScreen() {
             autoCapitalize="none"
           />
           <TextField
-            label="Mot de passe * (min. 6 caractères)"
+            label="Mot de passe * (min. 8 caractères, lettres + chiffres)"
             value={password}
             onChangeText={setPassword}
             placeholder="••••••••"
@@ -304,6 +251,14 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  confirmContainer: {
+    flex: 1, backgroundColor: Colors.background, alignItems: 'center',
+    justifyContent: 'center', padding: 32,
+  },
+  confirmIcon: { fontSize: 56, marginBottom: 18 },
+  confirmTitle: { fontSize: 24, fontFamily: Fonts.display, color: Colors.text, marginBottom: 12 },
+  confirmText: { fontSize: 14.5, fontFamily: Fonts.body, color: Colors.textMuted, textAlign: 'center', lineHeight: 22 },
+  confirmEmail: { color: Colors.primary, fontFamily: Fonts.bodyBold },
   scroll: { padding: 24, paddingTop: 60, width: '100%', maxWidth: 580, alignSelf: 'center' },
   back: { flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: 20, alignSelf: 'flex-start' },
   backText: { color: Colors.primary, fontSize: 15, fontFamily: Fonts.bodySemiBold },

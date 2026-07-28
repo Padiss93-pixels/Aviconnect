@@ -7,6 +7,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Send } from 'lucide-react-native';
 import { Colors, Fonts, Radius, Shadows } from '@/constants/theme';
 import { CONVERSATIONS, type Message } from '@/constants/mockData';
+import { useRewards } from '@/hooks/RewardsContext';
 
 const QUICK_REPLIES = [
   'Est-ce encore disponible ?',
@@ -28,6 +29,7 @@ export default function ChatScreen() {
   const [messages, setMessages] = useState<Message[]>(conv?.messages || []);
   const [input, setInput] = useState('');
   const listRef = useRef<FlatList>(null);
+  const { completeQuest } = useRewards();
 
   const participant = conv?.participant ?? 'Conversation';
   const tint = AVATAR_TINTS[participant.charCodeAt(0) % AVATAR_TINTS.length];
@@ -48,6 +50,7 @@ export default function ChatScreen() {
     };
     setMessages((prev) => [...prev, newMsg]);
     setInput('');
+    completeQuest('envoie_message');
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
   };
 

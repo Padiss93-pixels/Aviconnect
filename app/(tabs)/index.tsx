@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  FlatList, Linking, Platform, StatusBar,
+  FlatList, Linking, Platform, StatusBar, Dimensions, Image,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowRight, Factory, MapPin, ShieldCheck, Stethoscope, Users } from 'lucide-react-native';
 import { Colors, Fonts, Radius, Shadows } from '@/constants/theme';
@@ -13,18 +13,33 @@ import { useBesoins } from '@/hooks/BesoinContext';
 import { useAuthContext } from '@/hooks/AuthContext';
 import { usePubs } from '@/hooks/PubContext';
 import { useDrawer } from '@/hooks/DrawerContext';
+import { useBoost } from '@/hooks/BoostContext';
+import { Crown } from 'lucide-react-native';
 import LotCard from '@/components/LotCard';
 import LegalFooter from '@/components/LegalFooter';
 import ScreenHeader from '@/components/ui/ScreenHeader';
+import PlumesOrSVG from '@/components/PlumesOrSVG';
 
 export default function HomeScreen() {
-  const { user } = useAuthContext();
+  const { user, getAllUsers } = useAuthContext();
   const { toggle: toggleDrawer } = useDrawer();
+  const [partnerPhotos, setPartnerPhotos] = useState<Record<string, string>>({});
   const [slideIndex, setSlideIndex] = useState(0);
+  const carouselRef = useRef<FlatList>(null);
+  const slideWidth = Dimensions.get('window').width - 36;
   const { annonces: lots, unreadCount } = useAnnonces();
   const { banners } = usePubs();
   const { besoins: userBesoins } = useBesoins();
-  // Merge user besoins (most recent first) with mock besoins, dedup by id
+  const { featuredCouvoirs, boostedAnnonceIds, refreshBoosts } = useBoost();
+
+  useFocusEffect(useCallback(() => {
+    refreshBoosts();
+    getAllUsers().then((users) => {
+      const map: Record<string, string> = {};
+      users.forEach((u) => { if (u.photo) map[u.id] = u.photo; });
+      setPartnerPhotos(map);
+    });
+  }, [refreshBoosts]));
   const allBesoins = (() => {
     const mockIds = new Set(BESOINS.map((b) => b.id));
     const uniqueUser = userBesoins.filter((b) => !mockIds.has(b.id));
@@ -35,7 +50,11 @@ export default function HomeScreen() {
   useEffect(() => {
     if (activeSlides.length === 0) return;
     const timer = setInterval(() => {
-      setSlideIndex((i) => (i + 1) % activeSlides.length);
+      setSlideIndex((prev) => {
+        const next = (prev + 1) % activeSlides.length;
+        carouselRef.current?.scrollToIndex({ index: next, animated: true });
+        return next;
+      });
     }, 4500);
     return () => clearInterval(timer);
   }, [activeSlides.length]);
@@ -44,7 +63,7 @@ export default function HomeScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
 
-      <ScreenHeader showLogo onMenuPress={toggleDrawer} unreadCount={unreadCount} />
+      <ScreenHeader showLogo onMenuPress={toggleDrawer} unreadCount={unreadCount} showFavorites />
 
       <ScrollView showsVerticalScrollIndicator={false}>
 
@@ -56,53 +75,169 @@ export default function HomeScreen() {
           </Text>
         </View>
 
-        {/* Carousel bannières */}
-        {activeSlides.length > 0 && (() => {
-          const slide = activeSlides[slideIndex % activeSlides.length];
-          const hasLien = !!slide.lien;
-          const openSlide = () => {
-            if (!slide.lien) return;
-            if (Platform.OS === 'web') window.open(slide.lien, '_blank', 'noopener,noreferrer');
-            else Linking.openURL(slide.lien).catch(() => {});
-          };
-          return (
-            <View style={styles.carouselWrap}>
-              <TouchableOpacity
-                activeOpacity={hasLien ? 0.9 : 1}
-                onPress={hasLien ? openSlide : undefined}
-                style={styles.slide}
-              >
-                <LinearGradient
-                  colors={[Colors.ink, Colors.primaryDark]}
-                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                  style={StyleSheet.absoluteFillObject}
-                />
-                <View style={styles.slideDeco1} />
-                <View style={styles.slideDeco2} />
-                <View style={styles.slideInner}>
-                  <View style={styles.slidePill}><Text style={styles.slidePillText}>AviConnect</Text></View>
-                  <Text style={styles.slideTitle}>{slide.title}</Text>
-                  <Text style={styles.slideSub}>{slide.sub}</Text>
-                  {hasLien && (
-                    <View style={styles.slideCta}>
-                      <Text style={styles.slideCtaText}>Découvrir</Text>
-                      <View style={styles.slideCtaArrow}>
-                        <ArrowRight size={12} color={Colors.ink} strokeWidth={2} />
+        {/* Carousel bannières — swipeable */}
+        {activeSlides.length > 0 && (
+          <View style={styles.carouselWrap}>
+            <FlatList
+              ref={carouselRef}
+              data={activeSlides}
+              horizontal
+              pagingEnabled
+              snapToInterval={slideWidth}
+              snapToAlignment="start"
+              decelerationRate="fast"
+              showsHorizontalScrollIndicator={false}
+              keyExtractor={(item) => item.id}
+              getItemLayout={(_, index) => ({ length: slideWidth, offset: slideWidth * index, index })}
+              onMomentumScrollEnd={(e) => {
+                const newIndex = Math.round(e.nativeEvent.contentOffset.x / slideWidth);
+                setSlideIndex(newIndex);
+              }}
+              style={{ borderRadius: Radius.xl, overflow: 'hidden' }}
+              renderItem={({ item: slide }) => {
+                const hasLien = !!slide.lien;
+                const accent = slide.accentColor ?? Colors.gold;
+                const openSlide = () => {
+                  if (!slide.lien) return;
+                  if (Platform.OS === 'web') window.open(slide.lien, '_blank', 'noopener,noreferrer');
+                  else Linking.openURL(slide.lien).catch(() => {});
+                };
+                return (
+                  <TouchableOpacity
+                    activeOpacity={hasLien ? 0.9 : 1}
+                    onPress={hasLien ? openSlide : undefined}
+                    style={[styles.slide, { width: slideWidth }]}
+                  >
+                    {slide.image && !slide.image.startsWith('blob:') && (
+                      <Image
+                        source={{ uri: slide.image }}
+                        style={StyleSheet.absoluteFillObject}
+                        resizeMode="cover"
+                        onError={() => {}}
+                      />
+                    )}
+                    {(slide.bg || !slide.image) && (
+                      <LinearGradient
+                        colors={slide.type === 'promo'
+                          ? [slide.bg || Colors.primaryDark, (slide.bg || Colors.primaryDark) + 'CC']
+                          : slide.bg
+                            ? [slide.bg, slide.bg]
+                            : slide.image
+                              ? ['rgba(0,0,0,0.45)', 'rgba(0,0,0,0.65)']
+                              : [Colors.ink, Colors.primaryDark]}
+                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                        style={StyleSheet.absoluteFillObject}
+                      />
+                    )}
+                    <View style={[styles.slideDeco1, slide.type === 'promo' && { backgroundColor: accent + '18' }]} />
+                    <View style={[styles.slideDeco2, slide.type === 'promo' && { backgroundColor: accent + '22' }]} />
+
+                    {slide.type === 'promo' ? (
+                      <View style={[styles.slideInner, { flexDirection: 'row', alignItems: 'center', paddingVertical: 16 }]}>
+                        <View style={{ flex: 1 }}>
+                          {slide.tag && (
+                            <View style={[styles.slidePill, { backgroundColor: accent + '28', borderColor: accent + '55', borderWidth: 1 }]}>
+                              <Text style={[styles.slidePillText, { color: accent }]}>{slide.tag}</Text>
+                            </View>
+                          )}
+                          <Text style={[styles.slideTitle, { fontSize: 18 }]} numberOfLines={2}>{slide.title}</Text>
+                          <Text style={[styles.slideSub, { marginTop: 3 }]} numberOfLines={2}>{slide.sub}</Text>
+                          {slide.price && (
+                            <View style={[styles.promoPriceBadge, { borderColor: accent + '88', alignSelf: 'flex-start', marginTop: 8 }]}>
+                              <Text style={[styles.promoPriceLabel, { color: accent + 'BB' }]}>{slide.priceLabel}</Text>
+                              <Text style={[styles.promoPriceValue, { color: accent }]}>{slide.price}</Text>
+                            </View>
+                          )}
+                          {hasLien && (
+                            <View style={[styles.slideCta, { marginTop: 10, backgroundColor: accent }]}>
+                              <Text style={[styles.slideCtaText, { color: Colors.ink }]}>Appeler</Text>
+                              <View style={[styles.slideCtaArrow, { backgroundColor: 'rgba(0,0,0,0.12)' }]}>
+                                <ArrowRight size={12} color={Colors.ink} strokeWidth={2} />
+                              </View>
+                            </View>
+                          )}
+                        </View>
+                        {slide.id.startsWith('promo_pdo') && (
+                          <View style={{ marginLeft: 8, opacity: 0.95 }}>
+                            <PlumesOrSVG size={108} />
+                          </View>
+                        )}
                       </View>
-                    </View>
-                  )}
-                </View>
-              </TouchableOpacity>
-              {activeSlides.length > 1 && (
-                <View style={styles.dots}>
-                  {activeSlides.map((_, i) => (
-                    <View key={i} style={[styles.dot, i === slideIndex % activeSlides.length && styles.dotActive]} />
-                  ))}
-                </View>
-              )}
+                    ) : (
+                      <View style={styles.slideInner}>
+                        <View style={styles.slidePill}><Text style={styles.slidePillText}>AviConnect</Text></View>
+                        <Text style={styles.slideTitle}>{slide.title}</Text>
+                        <Text style={styles.slideSub}>{slide.sub}</Text>
+                        {hasLien && (
+                          <View style={styles.slideCta}>
+                            <Text style={styles.slideCtaText}>Découvrir</Text>
+                            <View style={styles.slideCtaArrow}>
+                              <ArrowRight size={12} color={Colors.ink} strokeWidth={2} />
+                            </View>
+                          </View>
+                        )}
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              }}
+            />
+            {activeSlides.length > 1 && (
+              <View style={styles.dots}>
+                {activeSlides.map((_, i) => (
+                  <View key={i} style={[styles.dot, i === slideIndex && styles.dotActive]} />
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Couvoirs en vedette */}
+        {featuredCouvoirs.length > 0 && (
+          <>
+            <View style={styles.sectionRow}>
+              <View>
+                <Text style={styles.sectionEyebrow}>Abonnés Premium ⭐</Text>
+                <Text style={styles.sectionTitle}>Partenaires certifiés</Text>
+              </View>
             </View>
-          );
-        })()}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingLeft: 22, paddingRight: 10, gap: 12 }}
+            >
+              {featuredCouvoirs.map((c) => (
+                <TouchableOpacity
+                  key={c.userId}
+                  style={styles.featuredCard}
+                  onPress={() => router.push({ pathname: c.role === 'veterinaire' ? '/veterinaire/[id]' : '/vendeur/[id]', params: { id: c.userId } })}
+                  activeOpacity={0.88}
+                >
+                  <View style={styles.featuredGoldRing}>
+                    {partnerPhotos[c.userId] ? (
+                      <Image source={{ uri: partnerPhotos[c.userId] }} style={styles.featuredAvatarImg} />
+                    ) : (
+                      <View style={styles.featuredAvatar}>
+                        <Text style={styles.featuredAvatarText}>
+                          {`${c.prenom[0]}${c.nom[0]}`.toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <Crown size={13} color={Colors.gold} fill={Colors.gold} strokeWidth={1.5} style={{ marginTop: 6 }} />
+                  {c.role === 'couvoir' && c.ferme ? (
+                    <Text style={styles.featuredFerme} numberOfLines={2}>{c.ferme}</Text>
+                  ) : (
+                    <Text style={styles.featuredRole} numberOfLines={1}>
+                      {c.role === 'veterinaire' ? 'Vétérinaire' : 'Couvoir'}
+                    </Text>
+                  )}
+                  {c.region && <Text style={styles.featuredRegion} numberOfLines={1}>{c.region}</Text>}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </>
+        )}
 
         {/* Annonces récentes */}
         <View style={styles.sectionRow}>
@@ -122,7 +257,7 @@ export default function HomeScreen() {
           keyExtractor={(item) => String(item.id)}
           renderItem={({ item }) => (
             <View style={{ marginRight: 14 }}>
-              <LotCard lot={item} compact />
+              <LotCard lot={item} compact isBoosted={boostedAnnonceIds.has(item.id)} />
             </View>
           )}
           contentContainerStyle={{ paddingLeft: 22, paddingRight: 10 }}
@@ -276,6 +411,13 @@ const styles = StyleSheet.create({
   dot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: Colors.separator },
   dotActive: { backgroundColor: Colors.accent, width: 20, borderRadius: 3 },
 
+  promoPriceBadge: {
+    borderRadius: 14, borderWidth: 1.5, paddingHorizontal: 12, paddingVertical: 8,
+    alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.06)', minWidth: 90,
+  },
+  promoPriceLabel: { fontSize: 9, fontFamily: Fonts.bodyBold, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 3 },
+  promoPriceValue: { fontSize: 17, fontFamily: Fonts.bodyExtraBold, letterSpacing: -0.3 },
+
   besoinsWrap: { paddingHorizontal: 20, gap: 10 },
   besoinCard: {
     backgroundColor: Colors.surface, borderRadius: Radius.lg, padding: 15,
@@ -302,6 +444,28 @@ const styles = StyleSheet.create({
   statBox: { flex: 1, gap: 5 },
   statVal: { fontSize: 22, fontFamily: Fonts.display, color: Colors.textOnDark, letterSpacing: -0.4, marginTop: 3 },
   statLbl: { fontSize: 10.5, fontFamily: Fonts.bodyMedium, color: Colors.textOnDarkMuted, lineHeight: 14 },
+
+  featuredCard: {
+    alignItems: 'center', width: 90,
+    backgroundColor: Colors.surface, borderRadius: Radius.lg,
+    padding: 12, borderWidth: 1, borderColor: Colors.gold + '55',
+    ...(Shadows.soft as object),
+  },
+  featuredGoldRing: {
+    width: 58, height: 58, borderRadius: 29,
+    borderWidth: 2, borderColor: Colors.gold,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  featuredAvatarImg: { width: 50, height: 50, borderRadius: 25 },
+  featuredAvatar: {
+    width: 50, height: 50, borderRadius: 25,
+    backgroundColor: Colors.primaryTint,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  featuredAvatarText: { fontSize: 18, fontFamily: Fonts.bodyExtraBold, color: Colors.primaryDark },
+  featuredFerme: { fontSize: 11, fontFamily: Fonts.bodyExtraBold, color: Colors.text, textAlign: 'center', marginTop: 2, lineHeight: 14 },
+  featuredRole: { fontSize: 11.5, fontFamily: Fonts.bodyBold, color: Colors.text, textAlign: 'center', marginTop: 2 },
+  featuredRegion: { fontSize: 10, fontFamily: Fonts.body, color: Colors.textMuted, textAlign: 'center', marginTop: 1 },
 
   partenaireRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 20, marginBottom: 22 },
   partenaireCard: {
