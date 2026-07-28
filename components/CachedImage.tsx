@@ -22,9 +22,12 @@ export default function CachedImage({ uri, style, containerStyle, resizeMode = '
       {status === 'loading' && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: skeletonColor }]} />
       )}
+      {/* L'image n'est plus masquée pendant le chargement : elle se dessine
+          progressivement par-dessus le fond, au lieu de laisser une vignette
+          vide le temps du téléchargement. */}
       <Image
         source={{ uri, cache: 'force-cache' } as any}
-        style={[style, status === 'loading' && styles.hidden]}
+        style={style}
         resizeMode={resizeMode}
         onLoad={() => setStatus('loaded')}
         onError={() => setStatus('error')}
@@ -36,6 +39,5 @@ export default function CachedImage({ uri, style, containerStyle, resizeMode = '
 }
 
 const styles = StyleSheet.create({
-  hidden: { opacity: 0 },
   errorBox: { justifyContent: 'center', alignItems: 'center', backgroundColor: '#f3f4f6' },
 });

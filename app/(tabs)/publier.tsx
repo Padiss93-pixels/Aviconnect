@@ -15,16 +15,41 @@ import { useRewards } from '@/hooks/RewardsContext';
 import { supabase } from '@/lib/supabase';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 
+// Largeur maximale des photos d'annonce. Une photo de téléphone fait 3000 à
+// 4000 px de large et pèse plusieurs mégaoctets : dans la grille du marché,
+// elle mettait plusieurs secondes à s'afficher sur une connexion mobile.
+// 1280 px suffit largement pour un affichage plein écran sur téléphone.
+const PHOTO_MAX_WIDTH = 1280;
+
+// Redimensionne et recompresse en JPEG avant l'envoi. En cas d'échec on
+// renvoie l'URI d'origine : mieux vaut une photo lourde que pas de photo.
+async function compressPhoto(uri: string): Promise<{ uri: string; ext: string; mime: string }> {
+  try {
+    const ImageManipulator = await import('expo-image-manipulator');
+    const result = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: PHOTO_MAX_WIDTH } }],
+      { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+    );
+    return { uri: result.uri, ext: 'jpg', mime: 'image/jpeg' };
+  } catch (e) {
+    console.warn('[photo] compression impossible, envoi de l’original', e);
+    const isBase64 = uri.startsWith('data:');
+    const ext = isBase64
+      ? (uri.startsWith('data:image/png') ? 'png' : 'jpg')
+      : (uri.split('.').pop()?.toLowerCase() || 'jpg');
+    return { uri, ext, mime: ext === 'png' ? 'image/png' : 'image/jpeg' };
+  }
+}
+
 async function uploadPhoto(uri: string, userId: string): Promise<string | null> {
   try {
-    const isBase64 = uri.startsWith('data:');
-    const ext = isBase64 ? (uri.startsWith('data:image/png') ? 'png' : 'jpg') : (uri.split('.').pop()?.toLowerCase() || 'jpg');
-    const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
-    const fileName = `${userId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-    const res = await fetch(uri);
+    const photo = await compressPhoto(uri);
+    const fileName = `${userId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${photo.ext}`;
+    const res = await fetch(photo.uri);
     const arrayBuffer = await res.arrayBuffer();
     const { error } = await supabase.storage.from('photos').upload(fileName, arrayBuffer, {
-      contentType: mimeType, upsert: false,
+      contentType: photo.mime, upsert: false,
     });
     if (error) { console.error('[photo upload]', error.message); return null; }
     return supabase.storage.from('photos').getPublicUrl(fileName).data.publicUrl;

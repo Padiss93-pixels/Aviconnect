@@ -69,6 +69,15 @@ create policy "reports_delete_admin"
   using (public.is_admin());
 
 -- Notifier tous les admins dès qu'un signalement arrive.
+--
+-- Deux précautions apprises en production :
+--   - n'écrire que dans les colonnes réellement présentes sur `notifications`
+--     (user_id, type, title, body, read, order_id) — la colonne `data` décrite
+--     dans schema.sql n'existe pas dans la base déployée ;
+--   - encapsuler l'insertion dans un bloc d'exception : le déclencheur tourne
+--     dans la transaction du signalement, donc son échec ferait perdre le
+--     signalement lui-même, ce qui est bien plus grave qu'une notification
+--     manquante.
 create or replace function public.notify_admins_on_report()
 returns trigger
 language plpgsql
@@ -76,15 +85,22 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.notifications (user_id, type, title, body, data)
-  select
-    p.id,
-    'signalement',
-    '🚩 Nouveau signalement',
-    'Un contenu a été signalé (' || new.motif || '). À examiner dans la modération.',
-    jsonb_build_object('report_id', new.id, 'target_type', new.target_type, 'target_id', new.target_id)
-  from public.profiles p
-  where p.role = 'admin';
+  begin
+    insert into public.notifications (user_id, type, title, body, read)
+    select
+      p.id,
+      'signalement',
+      '🚩 Nouveau signalement',
+      'Contenu signalé (' || new.motif || ') — '
+        || coalesce(new.target_label, new.target_type)
+        || '. À examiner dans la modération.',
+      false
+    from public.profiles p
+    where p.role = 'admin';
+  exception when others then
+    raise warning 'notification admin impossible pour le signalement % : %', new.id, sqlerrm;
+  end;
+
   return new;
 end;
 $$;

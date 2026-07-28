@@ -41,9 +41,8 @@
         "releaseStatus": "draft"
       },
       "ios": {
-        "appleId": "adamasidibe93@icloud.com",
-        "ascAppId": "A_REMPLIR_APP_STORE_CONNECT_APP_ID",
-        "appleTeamId": "A_REMPLIR_APPLE_TEAM_ID"
+        "ascAppId": "6795640729",
+        "appleTeamId": "PJLF66C88B"
       }
     }
   }

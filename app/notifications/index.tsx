@@ -13,6 +13,7 @@ const TYPE_CONFIG: Record<NotifType, { emoji: string; color: string; bg: string;
   vet_inscription:      { emoji: '💉', color: '#5b21b6', bg: '#ede9fe', link: '/admin/veterinaires' },
   boost_demande:        { emoji: '⚡', color: '#92600A', bg: '#FFFBF0', link: '/admin/boosts' },
   abonnement_demande:   { emoji: '👑', color: '#92600A', bg: '#FFFBF0', link: '/admin/boosts' },
+  signalement:          { emoji: '🚩', color: '#991b1b', bg: '#fee2e2', link: '/admin/moderation' },
 };
 
 async function requestPushPermission() {

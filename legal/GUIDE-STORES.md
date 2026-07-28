@@ -19,11 +19,11 @@ web **et** les pages légales en une seule opération.
 
 | Fichier | URL une fois déployé |
 |---|---|
-| `index.html` | `https://aviconnect.sn/legal/` |
-| `confidentialite.html` | `https://aviconnect.sn/legal/confidentialite.html` |
-| `cgu.html` | `https://aviconnect.sn/legal/cgu.html` |
-| `suppression-compte.html` | `https://aviconnect.sn/legal/suppression-compte.html` |
-| `mentions-legales.html` | `https://aviconnect.sn/legal/mentions-legales.html` |
+| `index.html` | `https://aviconnect.sn/legal` |
+| `confidentialite.html` | `https://aviconnect.sn/legal/confidentialite` |
+| `cgu.html` | `https://aviconnect.sn/legal/cgu` |
+| `suppression-compte.html` | `https://aviconnect.sn/legal/suppression-compte` |
+| `mentions-legales.html` | `https://aviconnect.sn/legal/mentions-legales` |
 
 > Ces URL doivent rester accessibles en permanence. Un lien mort = rejet ou retrait de l'app.
 
@@ -38,9 +38,9 @@ citées dans tous les documents légaux.
 
 | Rubrique | Réponse |
 |---|---|
-| URL de la politique de confidentialité | `https://aviconnect.sn/legal/confidentialite.html` |
+| URL de la politique de confidentialité | `https://aviconnect.sn/legal/confidentialite` |
 | Compte utilisateur requis ? | Oui |
-| URL de suppression de compte | `https://aviconnect.sn/legal/suppression-compte.html` |
+| URL de suppression de compte | `https://aviconnect.sn/legal/suppression-compte` |
 | Public cible | 18 ans et plus |
 | Application d'actualités ? | Non |
 | Contient des annonces (SDK publicitaire tiers) ? | **Non** — les bannières sont du contenu interne vendu en direct, sans régie ni SDK |
@@ -91,8 +91,8 @@ Android 13+. Rien à justifier.
 
 | Rubrique | Réponse |
 |---|---|
-| Privacy Policy URL | `https://aviconnect.sn/legal/confidentialite.html` |
-| Support URL | `https://aviconnect.sn/legal/` |
+| Privacy Policy URL | `https://aviconnect.sn/legal/confidentialite` |
+| Support URL | `https://aviconnect.sn/legal` |
 | Classification d'âge | 17+ (marketplace avec contenu utilisateur et mise en relation) |
 | EULA | L'EULA standard d'Apple suffit ; les CGU hébergées la complètent |
 

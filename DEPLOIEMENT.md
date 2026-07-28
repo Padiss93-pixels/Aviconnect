@@ -85,22 +85,62 @@ Puis **Deployments → Redeploy**. Les réglages attendus, que `vercel.json` imp
 
 ### 2.3 Brancher le domaine
 
-Vercel → **Settings → Domains** → ajouter `aviconnect.sn` et `www.aviconnect.sn`.
+> ⚠️ **Piège à connaître avant de commencer.** Dans la zone livrée par Nindohost, l'enregistrement
+> **MX pointe sur `aviconnect.sn` lui-même**, et `mail.aviconnect.sn` n'est qu'un alias CNAME vers ce
+> même domaine racine. La livraison du courrier suit donc l'adresse IP du domaine racine — exactement
+> celle que Vercel demande de changer. Modifier l'enregistrement A racine sans précaution envoie tous
+> les e-mails `@aviconnect.sn` vers Vercel, qui n'a aucun service de messagerie : ils sont perdus.
+>
+> Il faut détacher la messagerie du domaine racine **avant** de basculer vers Vercel.
 
-Vercel affichera les enregistrements DNS à créer. **Ne change pas les serveurs de noms** : ils
-doivent rester chez Nindohost, sinon les e-mails `@aviconnect.sn` cesseront de fonctionner.
-Il suffit de modifier deux enregistrements dans cPanel → **Zone Editor** :
+**Ne change jamais les serveurs de noms** : ils doivent rester chez Nindohost. Seuls quelques
+enregistrements de la zone sont à modifier, dans cPanel → **Zone Editor** → *Manage* sur
+`aviconnect.sn`.
 
-| Type | Nom | Valeur actuelle | Nouvelle valeur |
+#### Étape 1 — Détacher la messagerie (à faire en premier)
+
+| Action | Type | Nom | Valeur |
 |---|---|---|---|
-| A | `aviconnect.sn` | `46.4.4.202` | l'adresse IP indiquée par Vercel (généralement `76.76.21.21`) |
-| CNAME | `www` | — | `cname.vercel-dns.com` |
+| Supprimer | CNAME | `mail` | `aviconnect.sn` |
+| Créer | A | `mail` | `46.4.4.202` |
+| Modifier | MX | `@` | `mail.aviconnect.sn`, priorité `0` |
 
-**Ne touche à rien d'autre** : les enregistrements `MX`, `mail`, `ftp` et `cpanel` doivent rester
-tels quels pour que la messagerie et le panneau d'administration continuent de fonctionner.
+Vérifier dans cPanel → **Email Routing** que le réglage reste sur « Local Mail Exchanger ».
 
-La propagation prend de quelques minutes à quelques heures. Vercel émettra ensuite le certificat
-SSL automatiquement.
+#### Étape 2 — Attendre la propagation du MX
+
+```bash
+nslookup -type=MX aviconnect.sn 8.8.8.8
+```
+
+Ne pas passer à l'étape suivante tant que la réponse n'est pas `mail.aviconnect.sn`.
+
+#### Étape 3 — Ajouter le domaine dans Vercel
+
+Vercel → **Settings → Domains** → ajouter `aviconnect.sn` puis `www.aviconnect.sn`. Vercel affiche
+l'enregistrement attendu et restera en « Invalid Configuration » jusqu'à l'étape 4.
+
+#### Étape 4 — Basculer le domaine racine
+
+| Action | Type | Nom | Ancienne valeur | Nouvelle valeur |
+|---|---|---|---|---|
+| Modifier | A | `@` | `46.4.4.202` | `216.198.79.1` (valeur affichée par Vercel) |
+| Modifier | CNAME | `www` | `aviconnect.sn` | `cname.vercel-dns.com` |
+
+Si cPanel permet de régler la durée de vie, la passer à `300` avant la modification : la bascule
+sera plus rapide et plus simple à annuler.
+
+#### À ne pas toucher
+
+Les enregistrements `webmail`, `cpanel`, `ftp` et `autodiscover` sont des A records autonomes
+pointant vers `46.4.4.202` : ils continuent de fonctionner sans modification. L'accès au panneau
+reste de toute façon disponible sur `https://ichibi.nindohost.net/cpanel`.
+
+Le SPF (`v=spf1 +a +mx +ip4:46.4.28.20 include:spf.nindohost.net ~all`) reste valide après la
+bascule : le mécanisme `+mx` prend le relais du `+a` une fois l'étape 1 effectuée.
+
+La propagation prend de quelques minutes à quelques heures. Vercel émet ensuite le certificat SSL
+automatiquement.
 
 ---
 
@@ -145,9 +185,9 @@ Sans cela, la confirmation d'e-mail à l'inscription et la réinitialisation de 
 |---|---|
 | `https://aviconnect.sn/` | Accueil de l'app, titre « AviConnect — La marketplace avicole du Sénégal » |
 | `https://aviconnect.sn/marches` | Le marché (teste la réécriture d'URL) |
-| `https://aviconnect.sn/legal/confidentialite.html` | Politique de confidentialité |
-| `https://aviconnect.sn/legal/cgu.html` | Conditions générales |
-| `https://aviconnect.sn/legal/suppression-compte.html` | Suppression de compte |
+| `https://aviconnect.sn/legal/confidentialite` | Politique de confidentialité |
+| `https://aviconnect.sn/legal/cgu` | Conditions générales |
+| `https://aviconnect.sn/legal/suppression-compte` | Suppression de compte |
 | `https://aviconnect.sn/robots.txt` | Fichier robots |
 | `http://aviconnect.sn/` | Redirection vers HTTPS |
 
@@ -157,9 +197,9 @@ Sans cela, la confirmation d'e-mail à l'inscription et la réinitialisation de 
 
 | Champ | Valeur |
 |---|---|
-| Politique de confidentialité (Google Play + App Store) | `https://aviconnect.sn/legal/confidentialite.html` |
-| Suppression de compte (Google Play) | `https://aviconnect.sn/legal/suppression-compte.html` |
-| Support URL (App Store) | `https://aviconnect.sn/legal/` |
+| Politique de confidentialité (Google Play + App Store) | `https://aviconnect.sn/legal/confidentialite` |
+| Suppression de compte (Google Play) | `https://aviconnect.sn/legal/suppression-compte` |
+| Support URL (App Store) | `https://aviconnect.sn/legal` |
 | Site web de l'éditeur | `https://aviconnect.sn` |
 | E-mail de contact | `contact@aviconnect.sn` |
 

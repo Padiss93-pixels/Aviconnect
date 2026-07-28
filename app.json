@@ -18,7 +18,6 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "sn.aviconnect.app",
-      "buildNumber": "1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -29,7 +28,6 @@
         "backgroundColor": "#1E7A45"
       },
       "package": "sn.aviconnect.app",
-      "versionCode": 1,
       "allowBackup": false,
       "usesCleartextTraffic": false,
       "permissions": [],
