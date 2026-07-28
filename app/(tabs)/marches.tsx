@@ -258,10 +258,11 @@ export default function MarchesScreen() {
     </View>
   );
 
-  // Header qui scroll avec la liste
+  // Header qui scroll avec la liste.
+  // Le ScreenHeader n'y figure pas : il est fixé en haut de l'écran, au-dessus
+  // de la barre de recherche, pour que celle-ci ne passe pas sous l'encoche.
   const listHeader = (
     <>
-      <ScreenHeader title="Marché" onMenuPress={toggleDrawer} unreadCount={unreadCount} showFavorites />
       {!showFilters && (
         <View style={styles.pillsWrap}>
           <View style={styles.pillsRow}>
@@ -300,7 +301,10 @@ export default function MarchesScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Barre de recherche toujours visible en haut */}
+      {/* En-tête fixe : il porte la marge de sécurité (encoche, Dynamic Island) */}
+      <ScreenHeader title="Marché" onMenuPress={toggleDrawer} unreadCount={unreadCount} showFavorites />
+
+      {/* Barre de recherche toujours visible, juste sous l'en-tête */}
       <View style={styles.stickySearch}>{searchBar}</View>
 
       {/* Panneau filtres — affiché par display, jamais démonté */}
