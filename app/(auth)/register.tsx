@@ -10,6 +10,7 @@ import { ChevronLeft, Egg, ShoppingBag, Factory, Stethoscope } from 'lucide-reac
 import { Colors, Fonts, Radius } from '@/constants/theme';
 import Button from '@/components/ui/Button';
 import TextField from '@/components/ui/TextField';
+import PillRow from '@/components/PillRow';
 import { useAuthContext } from '@/hooks/AuthContext';
 import { REGIONS } from '@/constants/mockData';
 
@@ -215,7 +216,7 @@ export default function RegisterScreen() {
 
           {/* Région */}
           <Text style={styles.sectionLabel}>Ta région *</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.regionScroll}>
+          <PillRow style={styles.regionScroll}>
             {REGIONS.filter((r) => r !== 'Toutes').map((r) => (
               <TouchableOpacity
                 key={r}
@@ -225,7 +226,7 @@ export default function RegisterScreen() {
                 <Text style={[styles.regionText, region === r && styles.regionTextActive]}>{r}</Text>
               </TouchableOpacity>
             ))}
-          </ScrollView>
+          </PillRow>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 

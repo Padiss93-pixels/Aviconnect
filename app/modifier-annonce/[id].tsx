@@ -8,6 +8,7 @@ import { Colors } from '@/constants/Colors';
 import { REGIONS, PRODUCT_EMOJIS, PRODUCT_LABELS, type ProductType } from '@/constants/mockData';
 import { useAuthContext } from '@/hooks/AuthContext';
 import { useAnnonces } from '@/hooks/AnnoncesContext';
+import PillRow from '@/components/PillRow';
 
 const PRODUCTS: ProductType[] = ['poulet', 'poussin', 'oeuf', 'aliment'];
 const DISPOS = ['Immédiat', 'Dans 3 jours', 'Dans 1 semaine', 'Dans 2 semaines', 'Sur commande'];
@@ -128,7 +129,7 @@ export default function ModifierAnnonceScreen() {
         </View>
 
         <Text style={styles.label}>Région *</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+        <PillRow style={{ marginBottom: 16 }}>
           {REGIONS.filter((r) => r !== 'Toutes').map((r) => (
             <TouchableOpacity
               key={r}
@@ -138,10 +139,10 @@ export default function ModifierAnnonceScreen() {
               <Text style={[styles.pillText, region === r && styles.pillTextActive]}>{r}</Text>
             </TouchableOpacity>
           ))}
-        </ScrollView>
+        </PillRow>
 
         <Text style={styles.label}>Disponibilité</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+        <PillRow style={{ marginBottom: 16 }}>
           {DISPOS.map((d) => (
             <TouchableOpacity
               key={d}
@@ -151,7 +152,7 @@ export default function ModifierAnnonceScreen() {
               <Text style={[styles.pillText, dispo === d && styles.pillTextActive]}>{d}</Text>
             </TouchableOpacity>
           ))}
-        </ScrollView>
+        </PillRow>
 
         <Text style={styles.label}>Description</Text>
         <TextInput

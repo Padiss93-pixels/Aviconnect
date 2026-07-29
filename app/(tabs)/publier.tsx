@@ -8,6 +8,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
 import { REGIONS, PRODUCT_EMOJIS, PRODUCT_LABELS, type ProductType } from '@/constants/mockData';
+import PillRow from '@/components/PillRow';
 import { useAuthContext } from '@/hooks/AuthContext';
 import { useAnnonces } from '@/hooks/AnnoncesContext';
 import { useBesoins } from '@/hooks/BesoinContext';
@@ -226,23 +227,23 @@ function AnnounceForm() {
 
       {/* Région */}
       <Text style={styles.label}>Région *</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+      <PillRow style={{ marginBottom: 16 }}>
         {REGIONS.filter((r) => r !== 'Toutes').map((r) => (
           <TouchableOpacity key={r} style={[styles.pill, region === r && styles.pillActive]} onPress={() => setRegion(r)}>
             <Text style={[styles.pillText, region === r && styles.pillTextActive]}>{r}</Text>
           </TouchableOpacity>
         ))}
-      </ScrollView>
+      </PillRow>
 
       {/* Disponibilité */}
       <Text style={styles.label}>Disponibilité</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+      <PillRow style={{ marginBottom: 16 }}>
         {DISPOS.map((d) => (
           <TouchableOpacity key={d} style={[styles.pill, dispo === d && styles.pillActive]} onPress={() => setDispo(d)}>
             <Text style={[styles.pillText, dispo === d && styles.pillTextActive]}>{d}</Text>
           </TouchableOpacity>
         ))}
-      </ScrollView>
+      </PillRow>
 
       {/* Description */}
       <Text style={styles.label}>Description</Text>
@@ -343,13 +344,13 @@ function BesoinForm() {
 
       {/* Région */}
       <Text style={styles.label}>Région souhaitée *</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+      <PillRow style={{ marginBottom: 16 }}>
         {REGIONS.filter((r) => r !== 'Toutes').map((r) => (
           <TouchableOpacity key={r} style={[styles.pill, region === r && styles.pillActive]} onPress={() => setRegion(r)}>
             <Text style={[styles.pillText, region === r && styles.pillTextActive]}>{r}</Text>
           </TouchableOpacity>
         ))}
-      </ScrollView>
+      </PillRow>
 
       {/* Détail */}
       <Text style={styles.label}>Détails supplémentaires</Text>
