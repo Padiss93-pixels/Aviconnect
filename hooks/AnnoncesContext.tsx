@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Platform } from 'react-native';
+import { router } from 'expo-router';
 import { LOTS, type Lot } from '@/constants/mockData';
+import { notifRoute } from '@/constants/notifRoutes';
 import { useAuthContext } from './AuthContext';
 import { useModeration } from './ModerationContext';
 import { supabase } from '@/lib/supabase';
@@ -40,13 +42,21 @@ const NOTIF_ICONS: Record<NotifType, string> = {
   signalement: '🚩',
 };
 
-async function sendPush(title: string, body: string) {
+async function sendPush(title: string, body: string, type?: NotifType) {
   if (Platform.OS !== 'web') return;
   try {
     if (!('Notification' in window)) return;
     if (Notification.permission === 'default') await Notification.requestPermission();
     if (Notification.permission === 'granted') {
-      new Notification(title, { body, icon: '/icon.png' });
+      const notif = new Notification(title, { body, icon: '/icon.png' });
+      // Sans ce handler la bannière du navigateur est inerte : l'utilisateur
+      // la voit, clique, et rien ne se passe.
+      notif.onclick = () => {
+        window.focus();
+        const route = notifRoute(type);
+        router.push((route ?? '/notifications') as any);
+        notif.close();
+      };
     }
   } catch {}
 }
@@ -183,7 +193,7 @@ export function AnnoncesProvider({ children }: { children: React.ReactNode }) {
           if (prev.some((n) => n.id === notif.id)) return prev;
           return [notif, ...prev];
         });
-        sendPush(r.title, r.body);
+        sendPush(r.title, r.body, notif.type);
       })
       .subscribe();
     return () => { clearInterval(interval); supabase.removeChannel(sub); };
@@ -264,14 +274,19 @@ export function AnnoncesProvider({ children }: { children: React.ReactNode }) {
       .single();
 
     if (profile?.push_token) {
-      fetch('https://exp.host/--/exponent-push-notification-gateway', {
+      fetch('https://exp.host/--/api/v2/push/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
         body: JSON.stringify({
           to: profile.push_token,
           title,
           body,
-          data: { type, orderId: orderId ?? null },
+          // `url` est lu par le listener de usePushNotifications pour amener
+          // l'utilisateur sur l'écran qui permet de traiter la notification.
+          data: { type, orderId: orderId ?? null, otherUserId: user?.id ?? null, url: notifRoute(type) ?? '/notifications' },
           sound: 'default',
           channelId: 'default',
         }),

@@ -3,17 +3,28 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform } from '
 import { router } from 'expo-router';
 import { Colors } from '@/constants/Colors';
 import { useAnnonces, type NotifType } from '@/hooks/AnnoncesContext';
+import { notifRoute } from '@/constants/notifRoutes';
 
-const TYPE_CONFIG: Record<NotifType, { emoji: string; color: string; bg: string; link?: string }> = {
-  nouvelle_commande:    { emoji: '🛒', color: '#92400e', bg: '#fef3c7', link: '/commandes' },
-  commande_acceptee:    { emoji: '✅', color: '#166534', bg: '#dcfce7', link: '/commandes' },
-  commande_refusee:     { emoji: '❌', color: '#991b1b', bg: '#fee2e2', link: '/commandes' },
-  paiement_recu:        { emoji: '💰', color: '#1e40af', bg: '#dbeafe', link: '/commandes' },
-  couvoir_inscription:  { emoji: '🏭', color: '#9a3412', bg: '#ffedd5', link: '/admin/couvoirs' },
-  vet_inscription:      { emoji: '💉', color: '#5b21b6', bg: '#ede9fe', link: '/admin/veterinaires' },
-  boost_demande:        { emoji: '⚡', color: '#92600A', bg: '#FFFBF0', link: '/admin/boosts' },
-  abonnement_demande:   { emoji: '👑', color: '#92600A', bg: '#FFFBF0', link: '/admin/boosts' },
-  signalement:          { emoji: '🚩', color: '#991b1b', bg: '#fee2e2', link: '/admin/moderation' },
+// La destination du tap vient de constants/notifRoutes (partagée avec les
+// notifications push web et mobile) ; ici on ne décrit que l'apparence.
+const TYPE_CONFIG: Record<NotifType, { emoji: string; color: string; bg: string }> = {
+  nouvelle_commande:    { emoji: '🛒', color: '#92400e', bg: '#fef3c7' },
+  commande_acceptee:    { emoji: '✅', color: '#166534', bg: '#dcfce7' },
+  commande_refusee:     { emoji: '❌', color: '#991b1b', bg: '#fee2e2' },
+  paiement_recu:        { emoji: '💰', color: '#1e40af', bg: '#dbeafe' },
+  couvoir_inscription:  { emoji: '🏭', color: '#9a3412', bg: '#ffedd5' },
+  vet_inscription:      { emoji: '💉', color: '#5b21b6', bg: '#ede9fe' },
+  boost_demande:        { emoji: '⚡', color: '#92600A', bg: '#FFFBF0' },
+  abonnement_demande:   { emoji: '👑', color: '#92600A', bg: '#FFFBF0' },
+  signalement:          { emoji: '🚩', color: '#991b1b', bg: '#fee2e2' },
+};
+
+const ACTION_LABELS: Partial<Record<NotifType, string>> = {
+  signalement:         'Traiter le signalement →',
+  couvoir_inscription: 'Examiner la demande →',
+  vet_inscription:     'Examiner la demande →',
+  boost_demande:       'Examiner la demande →',
+  abonnement_demande:  'Examiner la demande →',
 };
 
 async function requestPushPermission() {
@@ -72,12 +83,13 @@ export default function NotificationsScreen() {
             )}
             {notifications.map((n) => {
               const cfg = TYPE_CONFIG[n.type] || { emoji: '🔔', color: Colors.text, bg: '#f3f4f6' };
+              const link = notifRoute(n.type);
               return (
                 <TouchableOpacity
                   key={n.id}
                   style={[styles.card, { borderLeftColor: cfg.bg }]}
-                  onPress={() => cfg.link && router.push(cfg.link as any)}
-                  activeOpacity={cfg.link ? 0.7 : 1}
+                  onPress={() => link && router.push(link as any)}
+                  activeOpacity={link ? 0.7 : 1}
                 >
                   <View style={[styles.iconBox, { backgroundColor: cfg.bg }]}>
                     <Text style={styles.icon}>{cfg.emoji}</Text>
@@ -86,8 +98,10 @@ export default function NotificationsScreen() {
                     <Text style={styles.cardTitle}>{n.title}</Text>
                     <Text style={styles.cardBody}>{n.body}</Text>
                     <Text style={styles.cardDate}>{formatDate(n.date)}</Text>
-                    {cfg.link && (
-                      <Text style={styles.cardLink}>Voir →</Text>
+                    {link && (
+                      <View style={styles.cardCta}>
+                        <Text style={styles.cardLink}>{ACTION_LABELS[n.type] ?? 'Voir →'}</Text>
+                      </View>
                     )}
                   </View>
                 </TouchableOpacity>
@@ -121,7 +135,12 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 14, fontWeight: '700', color: Colors.text, marginBottom: 3 },
   cardBody: { fontSize: 13, color: Colors.textLight, lineHeight: 19 },
   cardDate: { fontSize: 11, color: Colors.textMuted, marginTop: 5 },
-  cardLink: { fontSize: 12, color: Colors.primary, fontWeight: '700', marginTop: 4 },
+  cardCta: {
+    alignSelf: 'flex-start', marginTop: 8,
+    backgroundColor: Colors.primaryLight, borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 5,
+  },
+  cardLink: { fontSize: 12, color: Colors.primaryDark, fontWeight: '700' },
   pushBanner: {
     backgroundColor: Colors.primaryLight, borderRadius: 12, padding: 14,
     marginBottom: 12, borderWidth: 1, borderColor: Colors.primary,

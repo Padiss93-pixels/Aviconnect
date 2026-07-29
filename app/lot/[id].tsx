@@ -120,8 +120,9 @@ export default function LotDetailScreen() {
   };
 
   const openInAppChat = () => {
+    if (!lot.eleveurId) return;
     setShowContact(false);
-    router.push({ pathname: '/chat/[id]', params: { id: lot.id } });
+    router.push({ pathname: '/chat/[id]', params: { id: lot.eleveurId } });
   };
 
   return (

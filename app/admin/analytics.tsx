@@ -37,10 +37,12 @@ export default function AdminAnalytics() {
   const { user, isAdmin, isLoading } = useAuthContext();
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period>('semaine');
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
     const now = new Date();
     const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
     const weekStart = new Date(now); weekStart.setDate(now.getDate() - 7);
@@ -54,6 +56,21 @@ export default function AdminAnalytics() {
       supabase.from('app_visits').select('user_id', { count: 'exact' }).gte('created_at', monthStart.toISOString()),
       supabase.from('app_visits').select('created_at, user_id').gte('created_at', chartStart.toISOString()).order('created_at'),
     ]);
+
+    // Une erreur ici (table absente, RLS) donnerait sinon des compteurs à 0
+    // impossibles à distinguer d'une vraie absence de trafic.
+    const failed = [todayRes, weekRes, monthRes, rawDaily].find((r) => r.error);
+    if (failed?.error) {
+      console.error('[AviConnect] app_visits query error:', failed.error.message);
+      setError(
+        failed.error.code === 'PGRST205' || /schema cache|does not exist/i.test(failed.error.message)
+          ? "La table app_visits n'existe pas encore dans Supabase. Exécutez supabase/add_app_visits.sql dans le SQL Editor."
+          : failed.error.message,
+      );
+      setStats(null);
+      setLoading(false);
+      return;
+    }
 
     // Unique users par période
     const uniq = (rows: { user_id: string | null }[] | null) =>
@@ -124,6 +141,15 @@ export default function AdminAnalytics() {
 
       {loading ? (
         <View style={s.center}><ActivityIndicator color={Colors.primary} size="large" /></View>
+      ) : error ? (
+        <View style={s.errorBox}>
+          <Text style={s.errorEmoji}>📉</Text>
+          <Text style={s.errorTitle}>Statistiques indisponibles</Text>
+          <Text style={s.errorText}>{error}</Text>
+          <TouchableOpacity style={s.errorBtn} onPress={load} activeOpacity={0.85}>
+            <Text style={s.errorBtnText}>Réessayer</Text>
+          </TouchableOpacity>
+        </View>
       ) : stats ? (
         <ScrollView contentContainerStyle={s.scroll}>
 
@@ -231,6 +257,20 @@ export default function AdminAnalytics() {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  errorBox: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
+  errorEmoji: { fontSize: 48 },
+  errorTitle: { fontSize: 17, fontFamily: Fonts.bodyBold, color: Colors.text, marginTop: 14 },
+  errorText: {
+    fontSize: 13.5, fontFamily: Fonts.body, color: Colors.textSecondary,
+    textAlign: 'center', lineHeight: 20, marginTop: 8,
+  },
+  errorBtn: {
+    marginTop: 20, backgroundColor: Colors.primary,
+    borderRadius: Radius.pill, paddingHorizontal: 22, paddingVertical: 12,
+  },
+  errorBtnText: { color: '#fff', fontSize: 14, fontFamily: Fonts.bodyBold },
+
   header: {
     backgroundColor: Colors.primary,
     paddingTop: Platform.OS === 'ios' ? 56 : 42,

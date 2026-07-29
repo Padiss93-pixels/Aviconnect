@@ -3,7 +3,9 @@ import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
+import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { notifRoute } from '@/constants/notifRoutes';
 import { useAuthContext } from './AuthContext';
 
 // Affichage des notifs quand l'app est au premier plan
@@ -58,4 +60,35 @@ export function usePushNotifications() {
       }
     })();
   }, [user?.id]);
+
+  // Tap sur une notification système : sans ce listener la notif s'affiche
+  // mais reste inerte — l'app s'ouvre sur l'écran courant et l'admin ne peut
+  // pas atteindre l'écran qui permet de traiter le signalement.
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+
+    const go = (data: any) => {
+      const commandeTypes = ['nouvelle_commande', 'commande_acceptee', 'commande_refusee'];
+      if (data?.otherUserId && commandeTypes.includes(data?.type)) {
+        router.push(`/chat/${data.otherUserId}` as any);
+        return;
+      }
+      const route = data?.url ?? notifRoute(data?.type) ?? '/notifications';
+      router.push(route as any);
+    };
+
+    // App fermée : la notification qui l'a réveillée.
+    Notifications.getLastNotificationResponseAsync()
+      .then((response) => {
+        if (response) go(response.notification.request.content.data);
+      })
+      .catch(() => {});
+
+    // App ouverte ou en arrière-plan.
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      go(response.notification.request.content.data);
+    });
+
+    return () => sub.remove();
+  }, []);
 }

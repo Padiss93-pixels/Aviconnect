@@ -105,6 +105,11 @@ export default function AdminAnnonceurs() {
         supabase.from('pub_marches').select('id, actif'),
       ]);
 
+    // Même source que les statistiques d'audience : si app_visits manque, les
+    // compteurs de visites tombent à 0 sans rien dire.
+    const visitsErr = visits7Res.error ?? visits30Res.error;
+    if (visitsErr) console.error('[AviConnect] app_visits query error:', visitsErr.message);
+
     const profiles = profilesRes.data ?? [];
     const tally = (rows: any[], key: string) => {
       const m: Record<string, number> = {};

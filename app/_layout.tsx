@@ -54,7 +54,11 @@ function VisitLogger() {
     supabase.from('app_visits').insert({
       user_id: user.id,
       platform: Platform.OS,
-    }).then(() => {});
+    }).then(({ error }) => {
+      // Sans ce log, une table absente ou une RLS trop stricte fait
+      // silencieusement disparaître toutes les statistiques d'audience.
+      if (error) console.error('[AviConnect] app_visits insert error:', error.message);
+    });
   }, [user?.id]);
   return null;
 }

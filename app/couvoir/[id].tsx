@@ -81,7 +81,7 @@ export default function CouvoirDetailScreen() {
       </ScrollView>
 
       <View style={styles.actions}>
-        <TouchableOpacity style={styles.msgBtn} onPress={() => router.push({ pathname: '/chat/[id]', params: { id: 1 } })}>
+        <TouchableOpacity style={styles.msgBtn} onPress={() => router.push({ pathname: '/chat/[id]', params: { id } })}>
           <Text style={styles.msgBtnText}>💬 Message</Text>
         </TouchableOpacity>
         <TouchableOpacity

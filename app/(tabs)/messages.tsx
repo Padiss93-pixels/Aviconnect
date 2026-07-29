@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
   StyleSheet, TextInput, Platform,
@@ -6,32 +6,17 @@ import {
 import { router } from 'expo-router';
 import { LogIn, MessageCircle, Search, X } from 'lucide-react-native';
 import { Colors, Fonts, Radius, Shadows } from '@/constants/theme';
-import { CONVERSATIONS } from '@/constants/mockData';
 import { useAuthContext } from '@/hooks/AuthContext';
 
-const AVATAR_TINTS = [
-  { bg: Colors.primaryTint, fg: Colors.primaryDark },
-  { bg: Colors.accentLight, fg: Colors.accentDark },
-  { bg: '#F3E8CF', fg: '#8A6A2F' },
-  { bg: '#E3ECF4', fg: Colors.info },
-];
-
-const tintFor = (name: string) => AVATAR_TINTS[name.charCodeAt(0) % AVATAR_TINTS.length];
 
 export default function MessagesScreen() {
   const { user } = useAuthContext();
   const [query, setQuery] = useState('');
 
-  const conversations = useMemo(() => {
-    if (!user) return [];
-    const q = query.trim().toLowerCase();
-    if (!q) return CONVERSATIONS;
-    return CONVERSATIONS.filter(
-      (c) => c.participant.toLowerCase().includes(q) || c.lastMessage.toLowerCase().includes(q),
-    );
-  }, [user, query]);
-
-  const unreadTotal = CONVERSATIONS.reduce((sum, c) => sum + c.unread, 0);
+  // Les conversations réelles seront chargées depuis Supabase quand la table
+  // messages sera créée. Pour l'instant on affiche un état vide propre.
+  const conversations: never[] = [];
+  const unreadTotal = 0;
 
   return (
     <View style={styles.container}>
@@ -40,14 +25,7 @@ export default function MessagesScreen() {
       <View style={styles.header}>
         <Text style={styles.eyebrow}>Boîte de réception</Text>
         <Text style={styles.title}>Messages</Text>
-        {user ? (
-          <Text style={styles.subtitle}>
-            {CONVERSATIONS.length} conversation{CONVERSATIONS.length > 1 ? 's' : ''}
-            {unreadTotal > 0 ? ` · ${unreadTotal} non lu${unreadTotal > 1 ? 's' : ''}` : ''}
-          </Text>
-        ) : (
-          <Text style={styles.subtitle}>Discutez directement avec les vendeurs</Text>
-        )}
+        <Text style={styles.subtitle}>Discutez directement avec les vendeurs</Text>
       </View>
 
       {!user ? (
@@ -92,42 +70,9 @@ export default function MessagesScreen() {
 
           <FlatList
             data={conversations}
-            keyExtractor={(item) => String(item.id)}
+            keyExtractor={() => ''}
             showsVerticalScrollIndicator={false}
-            renderItem={({ item }) => {
-              const tint = tintFor(item.participant);
-              const hasUnread = item.unread > 0;
-              return (
-                <TouchableOpacity
-                  style={styles.convCard}
-                  activeOpacity={0.85}
-                  onPress={() => router.push({ pathname: '/chat/[id]', params: { id: item.id } })}
-                >
-                  <View style={[styles.avatar, { backgroundColor: tint.bg }]}>
-                    <Text style={[styles.avatarText, { color: tint.fg }]}>{item.participant[0]}</Text>
-                  </View>
-                  <View style={styles.convInfo}>
-                    <View style={styles.convTopRow}>
-                      <Text style={styles.convName} numberOfLines={1}>{item.participant}</Text>
-                      <Text style={[styles.convTime, hasUnread && styles.convTimeUnread]}>{item.timestamp}</Text>
-                    </View>
-                    <View style={styles.convBottomRow}>
-                      <Text
-                        style={[styles.convLast, hasUnread && styles.convLastUnread]}
-                        numberOfLines={1}
-                      >
-                        {item.lastMessage}
-                      </Text>
-                      {hasUnread && (
-                        <View style={styles.unreadBadge}>
-                          <Text style={styles.unreadText}>{item.unread}</Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              );
-            }}
+            renderItem={() => null}
             ListEmptyComponent={
               query.trim() ? (
                 <View style={styles.empty}>
