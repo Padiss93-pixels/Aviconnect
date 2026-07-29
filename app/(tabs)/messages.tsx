@@ -1,22 +1,100 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
   StyleSheet, TextInput, Platform,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { LogIn, MessageCircle, Search, X } from 'lucide-react-native';
 import { Colors, Fonts, Radius, Shadows } from '@/constants/theme';
 import { useAuthContext } from '@/hooks/AuthContext';
+import { supabase } from '@/lib/supabase';
 
+const AVATAR_TINTS = [
+  { bg: Colors.primaryTint, fg: Colors.primaryDark },
+  { bg: Colors.accentLight, fg: Colors.accentDark },
+  { bg: '#F3E8CF', fg: '#8A6A2F' },
+  { bg: '#E3ECF4', fg: Colors.info },
+];
+
+const tintFor = (name: string) => AVATAR_TINTS[name.charCodeAt(0) % AVATAR_TINTS.length];
+
+type Conversation = {
+  otherId: string;
+  otherName: string;
+  lastMessage: string;
+  timestamp: string;
+  unread: number;
+};
 
 export default function MessagesScreen() {
   const { user } = useAuthContext();
   const [query, setQuery] = useState('');
+  const [conversations, setConversations] = useState<Conversation[]>([]);
 
-  // Les conversations réelles seront chargées depuis Supabase quand la table
-  // messages sera créée. Pour l'instant on affiche un état vide propre.
-  const conversations: never[] = [];
-  const unreadTotal = 0;
+  const loadConversations = useCallback(async () => {
+    if (!user?.id) { setConversations([]); return; }
+
+    const { data: msgs } = await supabase
+      .from('messages')
+      .select('*')
+      .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+      .order('created_at', { ascending: false });
+
+    if (!msgs || msgs.length === 0) { setConversations([]); return; }
+
+    const byOther = new Map<string, typeof msgs>();
+    for (const m of msgs) {
+      const otherId = m.sender_id === user.id ? m.receiver_id : m.sender_id;
+      if (!byOther.has(otherId)) byOther.set(otherId, []);
+      byOther.get(otherId)!.push(m);
+    }
+
+    const otherIds = [...byOther.keys()];
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, prenom, nom')
+      .in('id', otherIds);
+
+    const nameOf = new Map((profiles ?? []).map((p) => [p.id, `${p.prenom} ${p.nom}`]));
+
+    const list: Conversation[] = otherIds.map((otherId) => {
+      const msgsFor = byOther.get(otherId)!;
+      const last = msgsFor[0];
+      const unread = msgsFor.filter((m) => m.receiver_id === user.id && !m.read).length;
+      return {
+        otherId,
+        otherName: nameOf.get(otherId) ?? 'Utilisateur',
+        lastMessage: last.text,
+        timestamp: new Date(last.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        unread,
+      };
+    });
+
+    setConversations(list);
+  }, [user?.id]);
+
+  useFocusEffect(useCallback(() => { loadConversations(); }, [loadConversations]));
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`messages-list-${user.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'messages',
+        filter: `receiver_id=eq.${user.id}`,
+      }, () => loadConversations())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id, loadConversations]);
+
+  const filtered = query.trim()
+    ? conversations.filter(
+        (c) => c.otherName.toLowerCase().includes(query.trim().toLowerCase())
+          || c.lastMessage.toLowerCase().includes(query.trim().toLowerCase()),
+      )
+    : conversations;
+
+  const unreadTotal = conversations.reduce((sum, c) => sum + c.unread, 0);
 
   return (
     <View style={styles.container}>
@@ -25,7 +103,14 @@ export default function MessagesScreen() {
       <View style={styles.header}>
         <Text style={styles.eyebrow}>Boîte de réception</Text>
         <Text style={styles.title}>Messages</Text>
-        <Text style={styles.subtitle}>Discutez directement avec les vendeurs</Text>
+        {user ? (
+          <Text style={styles.subtitle}>
+            {conversations.length} conversation{conversations.length > 1 ? 's' : ''}
+            {unreadTotal > 0 ? ` · ${unreadTotal} non lu${unreadTotal > 1 ? 's' : ''}` : ''}
+          </Text>
+        ) : (
+          <Text style={styles.subtitle}>Discutez directement avec les vendeurs</Text>
+        )}
       </View>
 
       {!user ? (
@@ -69,10 +154,43 @@ export default function MessagesScreen() {
           </View>
 
           <FlatList
-            data={conversations}
-            keyExtractor={() => ''}
+            data={filtered}
+            keyExtractor={(item) => item.otherId}
             showsVerticalScrollIndicator={false}
-            renderItem={() => null}
+            renderItem={({ item }) => {
+              const tint = tintFor(item.otherName);
+              const hasUnread = item.unread > 0;
+              return (
+                <TouchableOpacity
+                  style={styles.convCard}
+                  activeOpacity={0.85}
+                  onPress={() => router.push({ pathname: '/chat/[id]', params: { id: item.otherId } })}
+                >
+                  <View style={[styles.avatar, { backgroundColor: tint.bg }]}>
+                    <Text style={[styles.avatarText, { color: tint.fg }]}>{item.otherName[0]}</Text>
+                  </View>
+                  <View style={styles.convInfo}>
+                    <View style={styles.convTopRow}>
+                      <Text style={styles.convName} numberOfLines={1}>{item.otherName}</Text>
+                      <Text style={[styles.convTime, hasUnread && styles.convTimeUnread]}>{item.timestamp}</Text>
+                    </View>
+                    <View style={styles.convBottomRow}>
+                      <Text
+                        style={[styles.convLast, hasUnread && styles.convLastUnread]}
+                        numberOfLines={1}
+                      >
+                        {item.lastMessage}
+                      </Text>
+                      {hasUnread && (
+                        <View style={styles.unreadBadge}>
+                          <Text style={styles.unreadText}>{item.unread}</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            }}
             ListEmptyComponent={
               query.trim() ? (
                 <View style={styles.empty}>

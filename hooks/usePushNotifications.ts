@@ -68,7 +68,7 @@ export function usePushNotifications() {
     if (Platform.OS === 'web') return;
 
     const go = (data: any) => {
-      const commandeTypes = ['nouvelle_commande', 'commande_acceptee', 'commande_refusee'];
+      const commandeTypes = ['nouvelle_commande', 'commande_acceptee', 'commande_refusee', 'nouveau_message'];
       if (data?.otherUserId && commandeTypes.includes(data?.type)) {
         router.push(`/chat/${data.otherUserId}` as any);
         return;

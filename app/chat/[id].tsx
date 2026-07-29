@@ -157,12 +157,47 @@ export default function ChatScreen() {
       .select()
       .single();
 
+    if (error) {
+      console.error('[chat] insert error:', JSON.stringify(error));
+    }
     if (!error && data) {
       setMessages((prev) => prev.map((m) => m.id === optimistic.id ? data as DbMessage : m));
+      notifyReceiver(text);
     }
 
     setSending(false);
     completeQuest('envoie_message');
+  };
+
+  const notifyReceiver = async (text: string) => {
+    if (!user?.id || !id) return;
+    const { data: senderProfile } = await supabase
+      .from('profiles')
+      .select('prenom, nom')
+      .eq('id', user.id)
+      .single();
+    const senderName = senderProfile ? `${senderProfile.prenom} ${senderProfile.nom}` : 'Un utilisateur';
+
+    const { data: receiverProfile } = await supabase
+      .from('profiles')
+      .select('push_token')
+      .eq('id', id)
+      .single();
+
+    if (receiverProfile?.push_token) {
+      fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          to: receiverProfile.push_token,
+          title: `💬 ${senderName}`,
+          body: text,
+          data: { type: 'nouveau_message', otherUserId: user.id, url: `/chat/${user.id}` },
+          sound: 'default',
+          channelId: 'default',
+        }),
+      }).catch(() => {});
+    }
   };
 
   return (
