@@ -118,7 +118,6 @@ export default function RootLayout() {
             <Stack.Screen name="(auth)/forgot-password" options={{ headerShown: false }} />
             <Stack.Screen name="reset-password" options={{ headerShown: false }} />
             <Stack.Screen name="lot/[id]" options={{ headerShown: false }} />
-            <Stack.Screen name="couvoir/[id]" options={{ headerShown: false }} />
             <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
             <Stack.Screen name="commander/[id]" options={{ headerShown: false }} />
             <Stack.Screen name="aide/index" options={{ headerShown: false }} />

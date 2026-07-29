@@ -7,7 +7,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowRight, Factory, MapPin, ShieldCheck, Stethoscope, Users } from 'lucide-react-native';
 import { Colors, Fonts, Radius, Shadows } from '@/constants/theme';
-import { BESOINS, PRODUCT_EMOJIS, PRODUCT_LABELS } from '@/constants/mockData';
+import { PRODUCT_EMOJIS, PRODUCT_LABELS } from '@/constants/mockData';
 import { useAnnonces } from '@/hooks/AnnoncesContext';
 import { useBesoins } from '@/hooks/BesoinContext';
 import { useAuthContext } from '@/hooks/AuthContext';
@@ -40,11 +40,7 @@ export default function HomeScreen() {
       setPartnerPhotos(map);
     });
   }, [refreshBoosts]));
-  const allBesoins = (() => {
-    const mockIds = new Set(BESOINS.map((b) => b.id));
-    const uniqueUser = userBesoins.filter((b) => !mockIds.has(b.id));
-    return [...uniqueUser, ...BESOINS];
-  })();
+  const allBesoins = userBesoins;
   const activeSlides = banners.filter((b) => b.actif);
 
   useEffect(() => {
@@ -276,14 +272,43 @@ export default function HomeScreen() {
           {allBesoins.slice(0, 5).map((b) => {
             const nom = 'acheteurNom' in b ? b.acheteurNom : (b as any).acheteur;
             const isNew = 'acheteurId' in b;
+            // Les besoins de démonstration n'ont pas d'auteur en base : pas de
+            // profil à ouvrir pour eux, l'icône reste alors inerte.
+            const acheteurId = 'acheteurId' in b ? b.acheteurId : undefined;
+            const ouvrirProfil = () =>
+              acheteurId && router.push({ pathname: '/vendeur/[id]', params: { id: acheteurId } });
             return (
-              <View key={b.id} style={styles.besoinCard}>
-                <View style={styles.besoinEmojiBox}>
-                  <Text style={styles.besoinEmoji}>{PRODUCT_EMOJIS[b.produit]}</Text>
-                </View>
+              <TouchableOpacity
+                key={b.id}
+                style={styles.besoinCard}
+                onPress={() => router.push('/besoins' as any)}
+                activeOpacity={0.85}
+              >
+                {acheteurId ? (
+                  <TouchableOpacity
+                    style={styles.besoinEmojiBox}
+                    onPress={ouvrirProfil}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Voir le profil de ${nom}`}
+                  >
+                    <Text style={styles.besoinEmoji}>{PRODUCT_EMOJIS[b.produit]}</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.besoinEmojiBox}>
+                    <Text style={styles.besoinEmoji}>{PRODUCT_EMOJIS[b.produit]}</Text>
+                  </View>
+                )}
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={styles.besoinNom} numberOfLines={1}>{nom}</Text>
+                    <Text
+                      style={styles.besoinNom}
+                      numberOfLines={1}
+                      onPress={acheteurId ? ouvrirProfil : undefined}
+                      suppressHighlighting={!acheteurId}
+                    >
+                      {nom}
+                    </Text>
                     {isNew && (
                       <View style={styles.newBadge}>
                         <Text style={styles.newBadgeText}>Nouveau</Text>
@@ -296,7 +321,7 @@ export default function HomeScreen() {
                   <Text style={styles.besoinPrix}>{b.prixMax.toLocaleString()}</Text>
                   <Text style={styles.besoinPrixLbl}>F max</Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             );
           })}
         </View>

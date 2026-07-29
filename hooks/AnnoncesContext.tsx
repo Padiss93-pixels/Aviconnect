@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Platform } from 'react-native';
 import { router } from 'expo-router';
-import { LOTS, type Lot } from '@/constants/mockData';
+import { type Lot } from '@/constants/mockData';
 import { notifRoute } from '@/constants/notifRoutes';
 import { useAuthContext } from './AuthContext';
 import { useModeration } from './ModerationContext';
@@ -80,7 +80,7 @@ type AnnoncesContextType = {
 };
 
 const AnnoncesContext = createContext<AnnoncesContextType>({
-  annonces: LOTS, userLots: [], notifications: [], unreadCount: 0,
+  annonces: [], userLots: [], notifications: [], unreadCount: 0,
   addAnnonce: async () => {}, deleteAnnonce: async () => {},
   deleteAnnoncesByAuthor: async () => {},
   updateAnnonce: async () => {}, reduceStock: async () => {}, adjustStock: async () => {},
@@ -255,7 +255,12 @@ export function AnnoncesProvider({ children }: { children: React.ReactNode }) {
     const recipientId = targetUserId;
     if (!recipientId || recipientId === user?.id) return;
 
-    // Notif en base (in-app)
+    // Répartition des push, à garder synchronisée avec la liste SKIP_TYPES de
+    // supabase/functions/notify-push : les notifications de commande partent
+    // d'ici parce qu'elles seules connaissent `otherUserId` (deep-link chat),
+    // information absente de la table `notifications`. Tout ce qui est créé
+    // par un trigger PostgreSQL — signalements, inscriptions — est poussé par
+    // l'Edge Function. Un type présent des deux côtés arriverait en double.
     const { error } = await supabase.from('notifications').insert({
       user_id: recipientId,
       type,
@@ -295,13 +300,11 @@ export function AnnoncesProvider({ children }: { children: React.ReactNode }) {
   }, [user?.id]);
 
   const reduceStock = useCallback(async (lotId: number, qte: number, acheteur: string, orderId: number) => {
-    const dbLot = dbLots.find((l) => l.id === lotId);
-    const mockLot = LOTS.find((l) => l.id === lotId);
-    const lot = dbLot || mockLot;
+    const lot = dbLots.find((l) => l.id === lotId);
 
-    if (dbLot) {
+    if (lot) {
       await supabase.rpc('reduce_annonce_stock', { lot_id: lotId, qty: qte });
-      const newQte = Math.max(0, dbLot.qte - qte);
+      const newQte = Math.max(0, lot.qte - qte);
       setDbLots((prev) => prev.map((l) => l.id === lotId ? { ...l, qte: newQte } : l));
     }
 
@@ -335,10 +338,10 @@ export function AnnoncesProvider({ children }: { children: React.ReactNode }) {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  // Annonces Supabase en priorité + mocks (sans doublon d'id) — stock > 0 uniquement.
+  // Uniquement les annonces réelles de Supabase, stock > 0. Les annonces de
+  // démonstration ont été retirées à la mise en ligne du site.
   // Les annonces des vendeurs bloqués par l'utilisateur sont masquées (App Store 1.2).
-  const dbLotIds = new Set(dbLots.map((l) => l.id));
-  const annonces = [...dbLots, ...LOTS.filter((l) => !dbLotIds.has(l.id))]
+  const annonces = dbLots
     .filter((l) => l.qte > 0)
     .filter((l) => !isBlocked(l.eleveurId));
   const userLots = user ? dbLots.filter((l) => l.eleveurId === user.id) : [];

@@ -88,6 +88,18 @@ export default function ChatScreen() {
     loadMessages();
   }, [loadMessages]);
 
+  // Marquer les messages reçus comme lus à l'ouverture de la conversation
+  useEffect(() => {
+    if (!realUser || !id || !user?.id) return;
+    supabase
+      .from('messages')
+      .update({ read: true })
+      .eq('sender_id', id)
+      .eq('receiver_id', user.id)
+      .eq('read', false)
+      .then(() => {});
+  }, [id, user?.id, realUser]);
+
   // Abonnement temps réel
   useEffect(() => {
     if (!realUser || !id || !user?.id) return;
@@ -125,7 +137,10 @@ export default function ChatScreen() {
   const goProfile = () => {
     if (!otherUser) return;
     if (otherUser.role === 'veterinaire') router.push(`/veterinaire/${otherUser.id}` as any);
-    else if (otherUser.role === 'couvoir') router.push(`/couvoir/${otherUser.id}` as any);
+    // Les couvoirs passent par /vendeur/[id] : cette page lit le vrai profil
+    // Supabase et gère déjà le rôle couvoir. L'ancienne route /couvoir/[id]
+    // servait des couvoirs inventés et cherchait un id numérique, alors que
+    // otherUser.id est un uuid — elle ne pouvait rien trouver.
     else router.push(`/vendeur/${otherUser.id}` as any);
   };
 

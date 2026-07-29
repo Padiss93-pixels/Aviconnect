@@ -114,6 +114,27 @@ table `notifications` pour chaque compte ayant le rôle `admin` :
 
 Conséquence : un admin créé **après** l'événement ne recevra pas les notifications passées.
 
+### Notifications push (répartition client / serveur)
+
+Deux émetteurs distincts, à ne pas faire se recouvrir sous peine de double notification :
+
+| Origine | Types | Qui envoie le push |
+|---|---|---|
+| App (`sendNotification`) | `nouvelle_commande`, `commande_acceptee`, `commande_refusee` | Le client, directement vers l'API Expo |
+| Trigger PostgreSQL | `signalement`, `couvoir_inscription`, `vet_inscription`, autres | Edge Function `notify-push`, via Database Webhook sur INSERT dans `notifications` |
+
+Les notifications de commande partent du client parce qu'elles seules connaissent `otherUserId`
+(deep-link vers la conversation) — la table `notifications` ne stocke pas cet identifiant. La liste
+`SKIP_TYPES` de `supabase/functions/notify-push/index.ts` doit rester le miroir exact de la colonne
+« App » ci-dessus.
+
+La destination du tap vient de `constants/notifRoutes.ts`, partagée par la liste in-app, la bannière
+web et le listener mobile. `notify-push` en garde une copie (runtime Deno séparé) : toute route
+ajoutée doit être reportée dans les deux.
+
+Déploiement : `supabase functions deploy notify-push`, puis le webhook décrit dans
+`supabase/setup_push_webhook.sql`.
+
 ### Header pattern
 
 Toutes les pages utilisent un header custom (pas le header Expo Router). Pattern standard :

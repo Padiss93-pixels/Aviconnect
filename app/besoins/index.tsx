@@ -2,7 +2,7 @@ import { View, Text, ScrollView, StyleSheet, Platform, TouchableOpacity } from '
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
-import { BESOINS, PRODUCT_EMOJIS, PRODUCT_LABELS } from '@/constants/mockData';
+import { PRODUCT_EMOJIS, PRODUCT_LABELS } from '@/constants/mockData';
 import { useBesoins } from '@/hooks/BesoinContext';
 import { useAuthContext } from '@/hooks/AuthContext';
 import { useAnnonces } from '@/hooks/AnnoncesContext';
@@ -12,8 +12,9 @@ export default function BesoinsScreen() {
   const { besoins: userBesoins } = useBesoins();
   const { unreadCount } = useAnnonces();
 
-  // Besoins Supabase en priorité ; si vide, afficher les mocks
-  const allBesoins = userBesoins.length > 0 ? userBesoins : BESOINS;
+  // Uniquement les besoins réels. Aucun repli sur des demandes de
+  // démonstration : mieux vaut une liste vide qu'une liste inventée.
+  const allBesoins = userBesoins;
 
   const isAcheteur = user?.role === 'acheteur';
 
@@ -51,13 +52,30 @@ export default function BesoinsScreen() {
             const nom = 'acheteurNom' in b ? b.acheteurNom : (b as any).acheteur;
             const isNew = 'acheteurId' in b;
             const phone = 'acheteurPhone' in b ? b.acheteurPhone : undefined;
+            // Les besoins de démonstration n'ont pas d'auteur en base : pas de
+            // profil à ouvrir pour eux, l'icône reste alors inerte.
+            const acheteurId = 'acheteurId' in b ? b.acheteurId : undefined;
+            const ouvrirProfil = () =>
+              acheteurId && router.push({ pathname: '/vendeur/[id]', params: { id: acheteurId } });
             return (
               <View key={b.id} style={styles.card}>
                 {/* En-tête carte */}
                 <View style={styles.cardTop}>
-                  <View style={styles.emojiBox}>
-                    <Text style={styles.emoji}>{PRODUCT_EMOJIS[b.produit]}</Text>
-                  </View>
+                  {acheteurId ? (
+                    <TouchableOpacity
+                      style={styles.emojiBox}
+                      onPress={ouvrirProfil}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Voir le profil de ${nom}`}
+                    >
+                      <Text style={styles.emoji}>{PRODUCT_EMOJIS[b.produit]}</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={styles.emojiBox}>
+                      <Text style={styles.emoji}>{PRODUCT_EMOJIS[b.produit]}</Text>
+                    </View>
+                  )}
                   <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
                       <Text style={styles.produitLabel}>{PRODUCT_LABELS[b.produit]}</Text>
@@ -67,7 +85,14 @@ export default function BesoinsScreen() {
                         </View>
                       )}
                     </View>
-                    <Text style={styles.acheteurNom} numberOfLines={1}>{nom}</Text>
+                    <Text
+                      style={[styles.acheteurNom, acheteurId && styles.acheteurNomLien]}
+                      numberOfLines={1}
+                      onPress={acheteurId ? ouvrirProfil : undefined}
+                      suppressHighlighting={!acheteurId}
+                    >
+                      {nom}
+                    </Text>
                   </View>
                   <View style={styles.prixBox}>
                     <Text style={styles.prixVal}>{b.prixMax.toLocaleString()}</Text>
@@ -172,6 +197,7 @@ const styles = StyleSheet.create({
   emoji: { fontSize: 28 },
   produitLabel: { fontSize: 15, fontWeight: '700', color: Colors.text, letterSpacing: -0.2 },
   acheteurNom: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
+  acheteurNomLien: { color: Colors.primaryDark, fontWeight: '600' },
   prixBox: { alignItems: 'flex-end' },
   prixVal: { fontSize: 18, fontWeight: '900', color: Colors.primary, letterSpacing: -0.3 },
   prixLbl: { fontSize: 10, color: Colors.textMuted, marginTop: 1 },

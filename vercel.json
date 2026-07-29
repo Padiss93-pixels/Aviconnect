@@ -16,7 +16,6 @@
     { "source": "/lot/:id", "destination": "/lot/[id].html" },
     { "source": "/vendeur/:id", "destination": "/vendeur/[id].html" },
     { "source": "/veterinaire/:id", "destination": "/veterinaire/[id].html" },
-    { "source": "/couvoir/:id", "destination": "/couvoir/[id].html" },
     { "source": "/chat/:id", "destination": "/chat/[id].html" },
     { "source": "/commander/:id", "destination": "/commander/[id].html" },
     { "source": "/modifier-annonce/:id", "destination": "/modifier-annonce/[id].html" },

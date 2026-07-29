@@ -31,12 +31,12 @@ app/
   (auth)/          # Connexion, OTP, Inscription
   (tabs)/          # Accueil, Marchés, Publier, Messages, Profil
   lot/[id].tsx     # Détail annonce
-  couvoir/[id].tsx # Détail couvoir
+  vendeur/[id].tsx # Profil public (éleveur, couvoir, acheteur)
   chat/[id].tsx    # Chat
   couvoirs/        # Liste couvoirs
 constants/
   Colors.ts        # Palette couleurs
-  mockData.ts      # Données de démo
+  mockData.ts      # Constantes filière (régions, produits) — plus aucune donnée de démo
 hooks/
   AuthContext.tsx  # Contexte auth global
   useAuth.ts       # Helpers AsyncStorage

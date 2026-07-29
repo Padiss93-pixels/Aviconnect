@@ -43,7 +43,7 @@ citées dans tous les documents légaux.
 | URL de suppression de compte | `https://aviconnect.sn/legal/suppression-compte` |
 | Public cible | 18 ans et plus |
 | Application d'actualités ? | Non |
-| Contient des annonces (SDK publicitaire tiers) ? | **Non** — les bannières sont du contenu interne vendu en direct, sans régie ni SDK |
+| Contient des annonces ? | **Oui** — les bannières et encarts du marché font la promotion de produits et services de tiers, même vendus en direct et sans régie publicitaire. Google définit une annonce par son contenu, pas par la technologie qui la diffuse. |
 | Contenu généré par les utilisateurs ? | **Oui** — annonces, besoins, avis, messages |
 
 ### Formulaire « Sécurité des données » (Data Safety) — version Supabase
@@ -76,6 +76,21 @@ Questions transversales :
 Pour un **compte développeur personnel** créé après novembre 2023, Google impose un test fermé
 avec **12 testeurs inscrits pendant 14 jours consécutifs** avant d'autoriser la production.
 C'est le poste le plus long : à lancer en premier, avant même de finaliser la fiche.
+
+### Classification par âge (Apple) — réponses
+
+| Rubrique | Réponse |
+|---|---|
+| Contenu généré par les utilisateurs | Oui |
+| Réseaux sociaux | Oui |
+| Messagerie et chat | Oui |
+| Publicité | Oui (bannières et encarts sponsorisés) |
+| Accès au Web sans restrictions | Non — les liens s'ouvrent dans le navigateur du système, il n'y a pas de navigateur intégré |
+| Contrôle parental, validation de l'âge | Non |
+| Thèmes matures, sexualité, violence, jeux de hasard | Aucun |
+| Informations médicales, santé et bien-être | Aucun — le catalogue vétérinaire concerne la santé animale, pas humaine |
+
+Résultat attendu : 17+ / 18+.
 
 ### Permissions
 
