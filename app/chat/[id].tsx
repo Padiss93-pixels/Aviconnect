@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Linking,
@@ -6,8 +6,8 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Send, Phone, User } from 'lucide-react-native';
 import { Colors, Fonts, Radius, Shadows } from '@/constants/theme';
-import type { Message } from '@/constants/mockData';
 import { useRewards } from '@/hooks/RewardsContext';
+import { useAuthContext } from '@/hooks/AuthContext';
 import { supabase } from '@/lib/supabase';
 
 const QUICK_REPLIES = [
@@ -24,6 +24,15 @@ const AVATAR_TINTS = [
   { bg: '#E3ECF4', fg: Colors.info },
 ];
 
+type DbMessage = {
+  id: number;
+  sender_id: string;
+  receiver_id: string;
+  text: string;
+  created_at: string;
+  read: boolean;
+};
+
 type OtherUser = {
   id: string;
   prenom: string;
@@ -36,17 +45,23 @@ function isUUID(s: string) {
   return /^[0-9a-f-]{36}$/.test(s);
 }
 
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+}
+
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useAuthContext();
   const { completeQuest } = useRewards();
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<DbMessage[]>([]);
   const [otherUser, setOtherUser] = useState<OtherUser | null>(null);
+  const [sending, setSending] = useState(false);
   const listRef = useRef<FlatList>(null);
 
   const realUser = isUUID(id ?? '');
 
-  // Chargement profil réel depuis Supabase si ID utilisateur
+  // Profil de l'autre utilisateur
   useEffect(() => {
     if (!realUser || !id) return;
     supabase
@@ -54,10 +69,46 @@ export default function ChatScreen() {
       .select('id, prenom, nom, phone, role')
       .eq('id', id)
       .single()
-      .then(({ data }) => {
-        if (data) setOtherUser(data as OtherUser);
-      });
+      .then(({ data }) => { if (data) setOtherUser(data as OtherUser); });
   }, [id, realUser]);
+
+  // Chargement des messages existants
+  const loadMessages = useCallback(async () => {
+    if (!realUser || !id || !user?.id) return;
+    const { data } = await supabase
+      .from('messages')
+      .select('*')
+      .or(`and(sender_id.eq.${user.id},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${user.id})`)
+      .order('created_at', { ascending: true });
+    if (data) setMessages(data as DbMessage[]);
+  }, [id, user?.id, realUser]);
+
+  useEffect(() => {
+    loadMessages();
+  }, [loadMessages]);
+
+  // Abonnement temps réel
+  useEffect(() => {
+    if (!realUser || !id || !user?.id) return;
+    const channel = supabase
+      .channel(`chat-${user.id}-${id}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `receiver_id=eq.${user.id}`,
+      }, (payload) => {
+        const msg = payload.new as DbMessage;
+        if (msg.sender_id !== id) return;
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+        setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [id, user?.id, realUser]);
 
   const participant = realUser
     ? otherUser ? `${otherUser.prenom} ${otherUser.nom}` : '…'
@@ -72,9 +123,8 @@ export default function ChatScreen() {
 
   const goProfile = () => {
     if (!otherUser) return;
-    const role = otherUser.role;
-    if (role === 'veterinaire') router.push(`/veterinaire/${otherUser.id}` as any);
-    else if (role === 'couvoir') router.push(`/couvoir/${otherUser.id}` as any);
+    if (otherUser.role === 'veterinaire') router.push(`/veterinaire/${otherUser.id}` as any);
+    else if (otherUser.role === 'couvoir') router.push(`/couvoir/${otherUser.id}` as any);
     else router.push(`/vendeur/${otherUser.id}` as any);
   };
 
@@ -83,19 +133,35 @@ export default function ChatScreen() {
     Linking.openURL(`tel:${otherUser.phone}`);
   };
 
-  const send = () => {
+  const send = async () => {
     const text = input.trim();
-    if (!text) return;
-    const newMsg: Message = {
-      id: messages.length + 1,
-      senderId: 'me',
-      text,
-      timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-    };
-    setMessages((prev) => [...prev, newMsg]);
+    if (!text || !user?.id || !id || sending) return;
+    setSending(true);
     setInput('');
-    completeQuest('envoie_message');
+
+    const optimistic: DbMessage = {
+      id: Date.now(),
+      sender_id: user.id,
+      receiver_id: id,
+      text,
+      created_at: new Date().toISOString(),
+      read: false,
+    };
+    setMessages((prev) => [...prev, optimistic]);
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+
+    const { data, error } = await supabase
+      .from('messages')
+      .insert({ sender_id: user.id, receiver_id: id, text })
+      .select()
+      .single();
+
+    if (!error && data) {
+      setMessages((prev) => prev.map((m) => m.id === optimistic.id ? data as DbMessage : m));
+    }
+
+    setSending(false);
+    completeQuest('envoie_message');
   };
 
   return (
@@ -132,7 +198,6 @@ export default function ChatScreen() {
           </Text>
         </TouchableOpacity>
 
-        {/* Bouton appel direct */}
         {realUser && otherUser?.phone && (
           <TouchableOpacity style={styles.callBtn} onPress={callUser} hitSlop={8}>
             <Phone size={18} color={Colors.primary} strokeWidth={1.8} />
@@ -140,7 +205,6 @@ export default function ChatScreen() {
         )}
       </View>
 
-      {/* Bandeau profil rapide si ouvert depuis une notif */}
       {realUser && otherUser && (
         <TouchableOpacity style={styles.profileBand} onPress={goProfile} activeOpacity={0.8}>
           <User size={13} color={Colors.primary} strokeWidth={1.8} />
@@ -156,12 +220,14 @@ export default function ChatScreen() {
         data={messages}
         keyExtractor={(item) => String(item.id)}
         renderItem={({ item }) => {
-          const isMe = item.senderId === 'me';
+          const isMe = item.sender_id === user?.id;
           return (
             <View style={[styles.msgRow, isMe && styles.msgRowMe]}>
               <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
                 <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{item.text}</Text>
-                <Text style={[styles.timestamp, isMe && styles.timestampMe]}>{item.timestamp}</Text>
+                <Text style={[styles.timestamp, isMe && styles.timestampMe]}>
+                  {formatTime(item.created_at)}
+                </Text>
               </View>
             </View>
           );
@@ -170,17 +236,14 @@ export default function ChatScreen() {
         onLayout={() => listRef.current?.scrollToEnd()}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          realUser ? (
-            <View style={styles.emptyBox}>
-              <Text style={styles.emptyText}>
-                Démarrez la conversation avec {otherUser?.prenom ?? '…'} 👋
-              </Text>
-            </View>
-          ) : null
+          <View style={styles.emptyBox}>
+            <Text style={styles.emptyText}>
+              Démarrez la conversation avec {otherUser?.prenom ?? '…'} 👋
+            </Text>
+          </View>
         }
       />
 
-      {/* Réponses rapides */}
       {input.length === 0 && (
         <ScrollView
           horizontal
@@ -197,7 +260,6 @@ export default function ChatScreen() {
         </ScrollView>
       )}
 
-      {/* Saisie */}
       <View style={styles.inputRow}>
         <TextInput
           style={styles.input}
@@ -209,9 +271,9 @@ export default function ChatScreen() {
           onSubmitEditing={send}
         />
         <TouchableOpacity
-          style={[styles.sendBtn, !input.trim() && styles.sendBtnDisabled]}
+          style={[styles.sendBtn, (!input.trim() || sending) && styles.sendBtnDisabled]}
           onPress={send}
-          disabled={!input.trim()}
+          disabled={!input.trim() || sending}
           activeOpacity={0.85}
         >
           <Send size={18} color="#fff" strokeWidth={1.9} style={{ marginLeft: -2, marginTop: 1 }} />
@@ -232,10 +294,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.border,
   },
   backBtn: { width: 38, height: 38, justifyContent: 'center', alignItems: 'center' },
-  headerAvatar: {
-    width: 40, height: 40, borderRadius: 14,
-    justifyContent: 'center', alignItems: 'center',
-  },
+  headerAvatar: { width: 40, height: 40, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
   headerAvatarText: { fontSize: 17, fontFamily: Fonts.display },
   headerName: { fontSize: 15.5, fontFamily: Fonts.bodyBold, color: Colors.text },
   headerSub: { fontSize: 11, fontFamily: Fonts.body, color: Colors.textMuted, marginTop: 1 },
