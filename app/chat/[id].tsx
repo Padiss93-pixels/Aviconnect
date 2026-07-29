@@ -75,12 +75,13 @@ export default function ChatScreen() {
   // Chargement des messages existants
   const loadMessages = useCallback(async () => {
     if (!realUser || !id || !user?.id) return;
-    const { data } = await supabase
-      .from('messages')
-      .select('*')
-      .or(`and(sender_id.eq.${user.id},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${user.id})`)
-      .order('created_at', { ascending: true });
-    if (data) setMessages(data as DbMessage[]);
+    const [sent, received] = await Promise.all([
+      supabase.from('messages').select('*').eq('sender_id', user.id).eq('receiver_id', id),
+      supabase.from('messages').select('*').eq('sender_id', id).eq('receiver_id', user.id),
+    ]);
+    const all = [...(sent.data ?? []), ...(received.data ?? [])] as DbMessage[];
+    all.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    setMessages(all);
   }, [id, user?.id, realUser]);
 
   useEffect(() => {
