@@ -386,7 +386,7 @@ export default function MarchesScreen() {
 
       {/* Liste avec header qui scroll */}
       <View style={{ display: showFilters ? 'none' : 'flex', flex: 1 }}>
-        <FlatList
+        <Animated.FlatList
           data={rows}
           keyExtractor={(item) => item.id}
           ListHeaderComponent={listHeader}
