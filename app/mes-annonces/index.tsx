@@ -77,7 +77,7 @@ export default function MesAnnoncesScreen() {
                   <Text style={styles.cardDetail}>
                     {a.qte.toLocaleString()} unités · {a.prix.toLocaleString()} F CFA
                   </Text>
-                  <Text style={styles.cardMeta}>{a.region} · {a.dispo}</Text>
+                  <Text style={styles.cardMeta}>{a.commune ? `${a.commune}, ${a.region}` : a.region} · {a.dispo}</Text>
                   <View style={styles.activeBadge}>
                     <Text style={styles.activeBadgeText}>● Active</Text>
                   </View>

@@ -113,7 +113,7 @@ export default function CommanderScreen() {
           <Text style={styles.lotEmoji}>{PRODUCT_EMOJIS[lot.produit]}</Text>
           <View style={styles.lotInfo}>
             <Text style={styles.lotTitre}>{lot.titre}</Text>
-            <Text style={styles.lotEleveur}>👤 {lot.eleveur} · 📍 {lot.region}</Text>
+            <Text style={styles.lotEleveur}>👤 {lot.eleveur} · 📍 {lot.commune ? `${lot.commune}, ${lot.region}` : lot.region}</Text>
             <Text style={styles.lotPrix}>{lot.prix.toLocaleString()} F CFA / unité</Text>
             <Text style={styles.lotDispo}>Stock : {lot.qte.toLocaleString()} unités · {lot.dispo}</Text>
           </View>

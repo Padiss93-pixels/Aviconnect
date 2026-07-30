@@ -212,7 +212,7 @@ export default function LotDetailScreen() {
 
           <View style={styles.infoCard}>
             <InfoRow Icon={User} label="Éleveur / Couvoir" value={lot.eleveur} />
-            <InfoRow Icon={MapPin} label="Région" value={lot.region} />
+            <InfoRow Icon={MapPin} label="Région" value={lot.commune ? `${lot.commune}, ${lot.region}` : lot.region} />
             <InfoRow Icon={Calendar} label="Disponibilité" value={lot.dispo} />
             {lot.eleveurPhone ? (
               <InfoRow Icon={Phone} label="Téléphone" value={`+221 ${lot.eleveurPhone}`} last />

@@ -74,7 +74,9 @@ function LotCard({ lot, compact, isBoosted }: Props) {
           <Text style={styles.compactTitle} numberOfLines={2}>{lot.titre}</Text>
           <View style={styles.compactLocRow}>
             <MapPin size={10} color={Colors.textMuted} strokeWidth={1.8} />
-            <Text style={styles.compactLoc} numberOfLines={1}>{lot.region}</Text>
+            <Text style={styles.compactLoc} numberOfLines={1}>
+              {lot.commune ? `${lot.commune}, ${lot.region}` : lot.region}
+            </Text>
           </View>
           <Text style={styles.compactPrice}>{lot.prix.toLocaleString()} <Text style={styles.compactPriceSub}>F{isCarton ? '/crt' : ' CFA'}</Text></Text>
         </View>
@@ -140,7 +142,9 @@ function LotCard({ lot, compact, isBoosted }: Props) {
 
           <View style={styles.locRow}>
             <MapPin size={12} color={Colors.textMuted} strokeWidth={1.8} />
-            <Text style={styles.locText} numberOfLines={1}>{lot.region} · {lot.eleveur}</Text>
+            <Text style={styles.locText} numberOfLines={1}>
+              {lot.commune ? `${lot.commune}, ${lot.region}` : lot.region} · {lot.eleveur}
+            </Text>
           </View>
 
           {/* Prix + quantité */}
