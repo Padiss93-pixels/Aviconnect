@@ -5,18 +5,34 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Fonts, Radius, Shadows } from '@/constants/theme';
 import { useAuthContext } from '@/hooks/AuthContext';
+import { useUnreadMessages } from '@/hooks/UnreadMessagesContext';
 
 type LucideIcon = typeof House;
 
-function TabIcon({ Icon, label, focused }: { Icon: LucideIcon; label: string; focused: boolean }) {
+function TabIcon({
+  Icon, label, focused, badge = 0,
+}: { Icon: LucideIcon; label: string; focused: boolean; badge?: number }) {
   return (
     <View style={styles.tabIconWrap}>
       <View style={[styles.iconBox, focused && styles.iconBoxActive]}>
         <Icon size={21} color={focused ? Colors.primaryDark : Colors.textMuted} strokeWidth={focused ? 2 : 1.6} />
+        {badge > 0 && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{badge > 9 ? '9+' : badge}</Text>
+          </View>
+        )}
       </View>
       <Text style={[styles.tabLabel, focused && styles.tabLabelActive]}>{label}</Text>
     </View>
   );
+}
+
+// Le compteur compte les personnes, pas les messages : trois messages du même
+// éleveur affichent 1. Il redescend dès que la conversation est ouverte, le chat
+// marquant alors les messages comme lus.
+function MessagesTabIcon({ focused }: { focused: boolean }) {
+  const { unreadSenders } = useUnreadMessages();
+  return <TabIcon Icon={MessageCircle} label="Messages" focused={focused} badge={unreadSenders} />;
 }
 
 function PublishButton() {
@@ -87,7 +103,7 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="messages"
-        options={{ tabBarIcon: ({ focused }) => <TabIcon Icon={MessageCircle} label="Messages" focused={focused} /> }}
+        options={{ tabBarIcon: ({ focused }) => <MessagesTabIcon focused={focused} /> }}
       />
       <Tabs.Screen
         name="profil"
@@ -111,6 +127,14 @@ const styles = StyleSheet.create({
   },
   tabIconWrap: { alignItems: 'center', gap: 3, minWidth: 56 },
   iconBox: { width: 44, height: 30, borderRadius: Radius.pill, justifyContent: 'center', alignItems: 'center' },
+  badge: {
+    position: 'absolute', top: -2, right: 2,
+    backgroundColor: Colors.accent, borderRadius: Radius.pill,
+    minWidth: 17, height: 17, paddingHorizontal: 4,
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 1.5, borderColor: Colors.tabBar,
+  },
+  badgeText: { color: '#fff', fontSize: 9.5, fontFamily: Fonts.bodyBold },
   iconBoxActive: { backgroundColor: Colors.primaryTint },
   tabLabel: { fontSize: 10, color: Colors.textMuted, fontFamily: Fonts.bodyMedium },
   tabLabelActive: { color: Colors.primaryDark, fontFamily: Fonts.bodyBold },

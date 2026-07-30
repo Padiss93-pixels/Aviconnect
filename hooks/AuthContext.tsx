@@ -159,6 +159,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    // Le jeton push identifie l'appareil, pas le compte. Le laisser en place
+    // enverrait les notifications de ce compte au prochain utilisateur du
+    // téléphone : ses messages s'afficheraient sur l'écran de verrouillage de
+    // quelqu'un d'autre. On le libère donc avant de fermer la session.
+    if (user?.id) {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ push_token: null })
+        .eq('id', user.id);
+      if (error) console.error('[Push] liberation du jeton impossible:', error.message);
+    }
     await supabase.auth.signOut();
     setUser(null);
   };

@@ -42,6 +42,10 @@ const SKIP_TYPES = new Set([
   'nouvelle_commande',
   'commande_acceptee',
   'commande_refusee',
+  // Le chat pousse lui-même, avec un url /chat/<expéditeur> que cette fonction
+  // ne saurait pas reconstruire : la ligne `notifications` ne stocke pas
+  // l'identifiant de l'expéditeur.
+  'nouveau_message',
 ]);
 
 type WebhookPayload = {

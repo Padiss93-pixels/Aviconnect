@@ -17,9 +17,11 @@ const TYPE_CONFIG: Record<NotifType, { emoji: string; color: string; bg: string 
   boost_demande:        { emoji: '⚡', color: '#92600A', bg: '#FFFBF0' },
   abonnement_demande:   { emoji: '👑', color: '#92600A', bg: '#FFFBF0' },
   signalement:          { emoji: '🚩', color: '#991b1b', bg: '#fee2e2' },
+  nouveau_message:      { emoji: '💬', color: '#1e40af', bg: '#dbeafe' },
 };
 
 const ACTION_LABELS: Partial<Record<NotifType, string>> = {
+  nouveau_message:     'Ouvrir la conversation →',
   signalement:         'Traiter le signalement →',
   couvoir_inscription: 'Examiner la demande →',
   vet_inscription:     'Examiner la demande →',

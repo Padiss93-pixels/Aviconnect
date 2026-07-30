@@ -55,9 +55,18 @@ export function usePushNotifications() {
       }
 
       const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
-      if (token) {
-        await supabase.from('profiles').update({ push_token: token }).eq('id', user.id);
+      if (!token) {
+        console.warn('[Push] aucun jeton renvoye par Expo');
+        return;
       }
+      // Sans ce log, un echec d'enregistrement est invisible : le compte reste
+      // sans push_token et ne recoit jamais de notification systeme, sans que
+      // rien ne l'indique.
+      const { error } = await supabase
+        .from('profiles')
+        .update({ push_token: token })
+        .eq('id', user.id);
+      if (error) console.error('[Push] enregistrement du jeton impossible:', error.message);
     })();
   }, [user?.id]);
 

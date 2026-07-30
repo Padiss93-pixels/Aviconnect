@@ -15,6 +15,11 @@ export const NOTIF_ROUTES: Record<NotifType, string> = {
   boost_demande:       '/admin/boosts',
   abonnement_demande:  '/admin/boosts',
   signalement:         '/admin/moderation',
+  // Un message ne crée aucune ligne dans `notifications` — à l'intérieur de
+  // l'app, la pastille de l'onglet Messages joue ce rôle. Cette entrée sert
+  // uniquement de repli au tap sur la notification système, dont le `data.url`
+  // pointe déjà vers /chat/<expéditeur>.
+  nouveau_message:     '/messages',
 };
 
 export function notifRoute(type?: string | null): string | undefined {

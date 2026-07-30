@@ -193,6 +193,13 @@ export default function ChatScreen() {
       .single();
     const senderName = senderProfile ? `${senderProfile.prenom} ${senderProfile.nom}` : 'Un utilisateur';
 
+    // La ligne dans `notifications` — celle qui alimente le compteur de la
+    // cloche et la liste /notifications — est créée côté serveur par le trigger
+    // notify_on_message (supabase/add_notif_messages.sql). Elle ne peut pas
+    // l'être ici : `notifications` n'a aucune politique RLS d'insertion, donc
+    // un client ne peut pas écrire une notification destinée à autrui.
+    // Ce push-ci reste côté client car lui seul connaît l'expéditeur, et donc
+    // l'url exacte /chat/<expéditeur> à ouvrir au tap.
     const { data: receiverProfile } = await supabase
       .from('profiles')
       .select('push_token')

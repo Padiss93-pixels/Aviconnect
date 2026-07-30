@@ -18,7 +18,8 @@ export type NotifType =
   | 'vet_inscription'
   | 'boost_demande'
   | 'abonnement_demande'
-  | 'signalement';
+  | 'signalement'
+  | 'nouveau_message';
 
 export type Notification = {
   id: number;
@@ -40,6 +41,7 @@ const NOTIF_ICONS: Record<NotifType, string> = {
   couvoir_inscription: '🏭',
   vet_inscription: '💉',
   signalement: '🚩',
+  nouveau_message: '💬',
 };
 
 async function sendPush(title: string, body: string, type?: NotifType) {

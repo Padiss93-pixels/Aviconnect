@@ -31,6 +31,7 @@ import { RewardsProvider } from '@/hooks/RewardsContext';
 import { BoostProvider } from '@/hooks/BoostContext';
 import { FavoritesProvider } from '@/hooks/FavoritesContext';
 import { ModerationProvider } from '@/hooks/ModerationContext';
+import { UnreadMessagesProvider } from '@/hooks/UnreadMessagesContext';
 import DrawerMenu from '@/components/DrawerMenu';
 import RewardToast from '@/components/RewardToast';
 import OfflineBanner from '@/components/OfflineBanner';
@@ -101,6 +102,7 @@ export default function RootLayout() {
       <RewardsProvider>
       <BoostProvider>
       <FavoritesProvider>
+      <UnreadMessagesProvider>
       <DrawerProvider>
         <VisitLogger />
         <PushRegistrar />
@@ -163,6 +165,7 @@ export default function RootLayout() {
         </View>
         </View>
       </DrawerProvider>
+      </UnreadMessagesProvider>
       </FavoritesProvider>
       </BoostProvider>
       </RewardsProvider>
