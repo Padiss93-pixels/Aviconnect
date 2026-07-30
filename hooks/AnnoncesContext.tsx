@@ -97,6 +97,7 @@ function rowToLot(row: any): Lot {
     eleveurId: row.eleveur_id,
     eleveurPhone: row.eleveur_phone ?? undefined,
     region: row.region,
+    commune: row.commune ?? undefined,
     produit: row.produit,
     titre: row.titre,
     qte: row.qte,
@@ -208,6 +209,7 @@ export function AnnoncesProvider({ children }: { children: React.ReactNode }) {
       eleveur: lot.eleveur,
       eleveur_phone: lot.eleveurPhone ?? null,
       region: lot.region,
+      commune: lot.commune ?? null,
       produit: lot.produit,
       titre: lot.titre,
       qte: lot.qte,
@@ -240,6 +242,7 @@ export function AnnoncesProvider({ children }: { children: React.ReactNode }) {
       photos: lot.photos ?? [],
       unite: lot.unite ?? null,
       region: lot.region,
+      commune: lot.commune ?? null,
       produit: lot.produit,
     }).eq('id', lot.id).select().single();
     if (!error && data) {

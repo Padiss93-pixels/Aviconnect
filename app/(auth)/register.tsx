@@ -35,6 +35,7 @@ export default function RegisterScreen() {
   const [phone, setPhone] = useState('');
   const [ferme, setFerme] = useState('');
   const [region, setRegion] = useState('Dakar');
+  const [commune, setCommune] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [confirmationSent, setConfirmationSent] = useState(false);
@@ -79,6 +80,7 @@ export default function RegisterScreen() {
       phone: digits,
       role,
       region,
+      commune: commune.trim().slice(0, 80) || undefined,
       ferme: ferme.trim().slice(0, 80) || undefined,
     });
     setLoading(false);
@@ -227,6 +229,14 @@ export default function RegisterScreen() {
               </TouchableOpacity>
             ))}
           </PillRow>
+
+          {/* Commune / Village */}
+          <TextField
+            label="Commune ou village (facultatif)"
+            value={commune}
+            onChangeText={setCommune}
+            placeholder="Ex : Pikine, Thiès Nord, Ndoulo…"
+          />
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 

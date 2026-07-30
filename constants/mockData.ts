@@ -17,6 +17,7 @@ export type Lot = {
   eleveurId?: string;
   eleveurPhone?: string;
   region: string;
+  commune?: string;
   produit: ProductType;
   titre: string;
   qte: number;

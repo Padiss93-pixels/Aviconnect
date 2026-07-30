@@ -77,6 +77,7 @@ function AnnounceForm() {
   const [qte, setQte] = useState('');
   const [prix, setPrix] = useState('');
   const [region, setRegion] = useState(user?.region || 'Dakar');
+  const [commune, setCommune] = useState(user?.commune || '');
   const [dispo, setDispo] = useState('Immédiat');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
@@ -148,7 +149,7 @@ function AnnounceForm() {
       eleveur: user.prenom + ' ' + user.nom,
       eleveurId: user.id,
       eleveurPhone: user.phone || '',
-      region, produit, titre,
+      region, commune: commune.trim() || undefined, produit, titre,
       qte: parseInt(qte),
       prix: parseInt(prix),
       unite: isCarton ? 'carton' : 'piece',
@@ -234,6 +235,13 @@ function AnnounceForm() {
           </TouchableOpacity>
         ))}
       </PillRow>
+
+      {/* Commune / Village */}
+      <Text style={styles.label}>Commune ou village (facultatif)</Text>
+      <TextInput
+        style={[styles.input, { marginBottom: 16 }]} value={commune} onChangeText={setCommune}
+        placeholder="Ex : Pikine, Thiès Nord, Ndoulo…" placeholderTextColor={Colors.textMuted}
+      />
 
       {/* Disponibilité */}
       <Text style={styles.label}>Disponibilité</Text>

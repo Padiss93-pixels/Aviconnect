@@ -59,6 +59,7 @@ export default function ProfilScreen() {
   const [phone, setPhone] = useState(user?.phone || '');
   const [ferme, setFerme] = useState(user?.ferme || '');
   const [region, setRegion] = useState(user?.region || 'Dakar');
+  const [commune, setCommune] = useState(user?.commune || '');
   const [error, setError] = useState('');
 
   const handleChangePhoto = async () => {
@@ -138,6 +139,7 @@ export default function ProfilScreen() {
     setPhone(user.phone);
     setFerme(user.ferme || '');
     setRegion(user.region);
+    setCommune(user.commune || '');
     setError('');
     setEditing(true);
   };
@@ -154,7 +156,7 @@ export default function ProfilScreen() {
     }
     setError('');
     setSaving(true);
-    const updated = { ...user, prenom, nom, phone: digits || phone, ferme, region };
+    const updated = { ...user, prenom, nom, phone: digits || phone, ferme, region, commune: commune.trim() || undefined };
     const result = await updateProfile(updated);
     if (result.error) {
       setError('Impossible d\'enregistrer le profil. Vérifie ta connexion.');
@@ -299,7 +301,9 @@ export default function ProfilScreen() {
             ) : null}
             <View style={styles.heroDetailRow}>
               <MapPin size={13} color={Colors.textOnDarkMuted} strokeWidth={1.7} />
-              <Text style={styles.heroDetailText}>{user.region}</Text>
+              <Text style={styles.heroDetailText}>
+                {user.commune ? `${user.commune}, ${user.region}` : user.region}
+              </Text>
             </View>
           </View>
 
@@ -387,6 +391,15 @@ export default function ProfilScreen() {
                 </TouchableOpacity>
               ))}
             </ScrollView>
+
+            <Text style={styles.fieldLabel}>Commune ou village (facultatif)</Text>
+            <TextInput
+              style={styles.fieldInput}
+              value={commune}
+              onChangeText={setCommune}
+              placeholder="Ex : Pikine, Thiès Nord, Ndoulo…"
+              placeholderTextColor={Colors.textPlaceholder}
+            />
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 

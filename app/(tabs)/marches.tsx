@@ -184,6 +184,7 @@ export default function MarchesScreen() {
           !normalize(l.titre).includes(q) &&
           !normalize(l.eleveur).includes(q) &&
           !normalize(l.region).includes(q) &&
+          !(l.commune && normalize(l.commune).includes(q)) &&
           !normalize(l.produit).includes(q) &&
           !(l.detail && normalize(l.detail).includes(q))
         ) return false;

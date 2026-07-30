@@ -8,6 +8,7 @@ export type User = {
   nom: string;
   ferme?: string;
   region: string;
+  commune?: string;
   role: 'eleveur' | 'acheteur' | 'couvoir' | 'admin' | 'veterinaire';
   verified: boolean;
   blocked?: boolean;
@@ -31,6 +32,7 @@ type ProfileRow = {
   ferme: string | null;
   clinique: string | null;
   region: string;
+  commune: string | null;
   role: User['role'];
   verified: boolean;
   blocked: boolean;
@@ -49,6 +51,7 @@ export function mapProfileToUser(row: ProfileRow): User {
     ferme: row.ferme || undefined,
     clinique: row.clinique || undefined,
     region: row.region,
+    commune: row.commune || undefined,
     role: row.role,
     verified: row.verified,
     blocked: row.blocked,
@@ -93,6 +96,7 @@ export async function storeUser(user: User): Promise<{ error?: string }> {
       ferme: user.ferme ?? null,
       clinique: user.clinique ?? null,
       region: user.region,
+      commune: user.commune ?? null,
       photo_url: user.photo ?? null,
     })
     .eq('id', user.id);

@@ -36,6 +36,7 @@ export default function ModifierAnnonceScreen() {
   const [qte, setQte] = useState(String(lot.qte));
   const [prix, setPrix] = useState(String(lot.prix));
   const [region, setRegion] = useState(lot.region);
+  const [commune, setCommune] = useState(lot.commune || '');
   const [dispo, setDispo] = useState(lot.dispo);
   const [description, setDescription] = useState(lot.detail || '');
   const [loading, setLoading] = useState(false);
@@ -54,6 +55,7 @@ export default function ModifierAnnonceScreen() {
       qte: parseInt(qte),
       prix: parseInt(prix),
       region,
+      commune: commune.trim() || undefined,
       dispo,
       detail: description,
     });
@@ -140,6 +142,15 @@ export default function ModifierAnnonceScreen() {
             </TouchableOpacity>
           ))}
         </PillRow>
+
+        <Text style={styles.label}>Commune ou village (facultatif)</Text>
+        <TextInput
+          style={[styles.input, { marginBottom: 16 }]}
+          value={commune}
+          onChangeText={setCommune}
+          placeholder="Ex : Pikine, Thiès Nord, Ndoulo…"
+          placeholderTextColor={Colors.textMuted}
+        />
 
         <Text style={styles.label}>Disponibilité</Text>
         <PillRow style={{ marginBottom: 16 }}>

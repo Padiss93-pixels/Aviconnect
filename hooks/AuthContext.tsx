@@ -14,6 +14,7 @@ export type SignUpParams = {
   phone: string;
   role: 'eleveur' | 'acheteur' | 'couvoir' | 'veterinaire';
   region: string;
+  commune?: string;
   ferme?: string;
   clinique?: string;
 };
@@ -137,6 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             phone: params.phone,
             role: params.role,
             region: params.region,
+            commune: params.commune || '',
             ferme: params.ferme || '',
             clinique: params.clinique || '',
           },
