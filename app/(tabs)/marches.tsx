@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
-  View, Text, Pressable, Animated,
+  View, Text, Pressable,
   StyleSheet, TextInput, FlatList, ScrollView, Platform, Linking, TouchableOpacity, Image,
 } from 'react-native';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
@@ -134,18 +134,6 @@ function Chip({ label, active, onPress }: { label: string; active: boolean; onPr
 
 export default function MarchesScreen() {
   const params = useLocalSearchParams<{ produit?: string; q?: string }>();
-
-  // La bannière (ScreenHeader) défile avec le contenu ; la barre de recherche
-  // "rattrape" le haut de l'écran pendant ce défilement et s'y bloque une fois
-  // la bannière sortie de vue (effet sticky classique).
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const [bannerHeight, setBannerHeight] = useState(0);
-  const [searchHeight, setSearchHeight] = useState(0);
-  const searchTranslateY = scrollY.interpolate({
-    inputRange: [0, Math.max(bannerHeight, 1)],
-    outputRange: [bannerHeight, 0],
-    extrapolate: 'clamp',
-  });
   const { annonces: allLots, unreadCount } = useAnnonces();
   const { boostedAnnonceIds, refreshBoosts } = useBoost();
 
@@ -276,11 +264,6 @@ export default function MarchesScreen() {
   // de la barre de recherche, pour que celle-ci ne passe pas sous l'encoche.
   const listHeader = (
     <>
-      <View onLayout={(e) => setBannerHeight(e.nativeEvent.layout.height)}>
-        <ScreenHeader title="Marché" onMenuPress={toggleDrawer} unreadCount={unreadCount} showFavorites />
-      </View>
-      {/* Espace réservé pour la barre de recherche (superposée en overlay) */}
-      <View style={{ height: searchHeight }} />
       {!showFilters && (
         <View style={styles.pillsWrap}>
           <View style={styles.pillsRow}>
@@ -319,16 +302,11 @@ export default function MarchesScreen() {
 
   return (
     <View style={styles.container}>
-      {/* La bannière (ScreenHeader) défile désormais avec les catégories, dans
-          le ListHeaderComponent. La barre de recherche est superposée en overlay
-          animé : elle repose d'abord juste sous la bannière, puis remonte et se
-          bloque en haut de l'écran une fois la bannière sortie de vue. */}
-      <Animated.View
-        style={[styles.stickySearch, { transform: [{ translateY: searchTranslateY }] }]}
-        onLayout={(e) => setSearchHeight(e.nativeEvent.layout.height)}
-      >
-        {searchBar}
-      </Animated.View>
+      {/* En-tête fixe : il porte la marge de sécurité (encoche, Dynamic Island) */}
+      <ScreenHeader title="Marché" onMenuPress={toggleDrawer} unreadCount={unreadCount} showFavorites />
+
+      {/* Barre de recherche toujours visible, juste sous l'en-tête */}
+      <View style={styles.stickySearch}>{searchBar}</View>
 
       {/* Panneau filtres — affiché par display, jamais démonté */}
       <View style={{ display: showFilters ? 'flex' : 'none', flex: 1 }}>
@@ -386,7 +364,7 @@ export default function MarchesScreen() {
 
       {/* Liste avec header qui scroll */}
       <View style={{ display: showFilters ? 'none' : 'flex', flex: 1 }}>
-        <Animated.FlatList
+        <FlatList
           data={rows}
           keyExtractor={(item) => item.id}
           ListHeaderComponent={listHeader}
@@ -430,11 +408,6 @@ export default function MarchesScreen() {
           }
           contentContainerStyle={{ padding: 10, paddingBottom: 110 }}
           showsVerticalScrollIndicator={false}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: true },
-          )}
-          scrollEventThrottle={16}
         />
       </View>
     </View>
@@ -444,8 +417,6 @@ export default function MarchesScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   stickySearch: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0,
     zIndex: 10,
     backgroundColor: Colors.surface,
     ...Platform.select({
